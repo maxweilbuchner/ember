@@ -44,6 +44,10 @@ struct CaptureComposer: View {
         let entry = Entry(text: trimmedText)
         modelContext.insert(entry)
         try? modelContext.save()
+        let entryID = entry.id
+        let entryText = entry.text
+        let services = services
+        Task { await services.extractEntry(id: entryID, text: entryText) }
         text = ""
         isFocused = true
     }

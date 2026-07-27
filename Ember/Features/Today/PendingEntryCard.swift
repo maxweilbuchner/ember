@@ -9,6 +9,7 @@ import SwiftUI
 /// stays as the fallback for model-unavailable states.)
 struct PendingEntryCard: View {
     let entry: Entry
+    @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var modelContext
     @State private var showReview = false
 
@@ -16,6 +17,9 @@ struct PendingEntryCard: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(entry.previewLine)
                 .lineLimit(2)
+            if let suggestions = services.entrySuggestions[entry.id] {
+                ExtractionChipsView(entry: entry, suggestions: suggestions)
+            }
             HStack {
                 Text(entry.date, style: .time)
                     .font(.caption)
@@ -24,6 +28,7 @@ struct PendingEntryCard: View {
                 Button(String(localized: "Skip")) {
                     entry.extractionState = .skipped
                     try? modelContext.save()
+                    services.entrySuggestions[entry.id] = nil
                 }
                 .buttonStyle(.bordered)
                 Button(String(localized: "Review")) {

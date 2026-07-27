@@ -39,6 +39,15 @@ struct SettingsView: View {
                     }
                 }
 
+                Section(String(localized: "Apple Intelligence")) {
+                    LabeledContent(String(localized: "Suggestions & drafts"), value: services.modelAvailability.statusText)
+                    if let explanation = services.modelAvailability.explanation {
+                        Text(explanation)
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
                 Section(String(localized: "Privacy & data")) {
                     LabeledContent(String(localized: "App lock"), value: String(localized: "Coming soon"))
                     LabeledContent(String(localized: "Export"), value: String(localized: "Coming soon"))
@@ -63,6 +72,7 @@ struct SettingsView: View {
             }
             .onAppear {
                 contactStatus = ContactService.authorizationStatus
+                services.modelAvailability = .current
             }
         }
     }

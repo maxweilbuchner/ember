@@ -34,6 +34,14 @@ nonisolated enum NudgeCopy {
         return lines.joined(separator: " ")
     }
 
+    /// Context plus an optional sanitized AI draft. A nil draft is a normal state —
+    /// the nudge simply ships context-only.
+    static func notificationBody(for candidate: NudgeCandidate, draft: String?) -> String {
+        let context = notificationBody(for: candidate)
+        guard let draft, !draft.isEmpty else { return context }
+        return context + "\n“" + draft + "”"
+    }
+
     /// Short reason stored on NudgeLog and shown in the "why am I seeing this?" UI.
     static func reasonLine(for candidate: NudgeCandidate) -> String {
         var parts: [String] = [String(localized: "It's been a while")]

@@ -17,10 +17,15 @@ actor NudgeEngine {
 
     private let container: ModelContainer
     private let contacts: ContactService
+    private var draftProvider: (any DraftProviding)?
 
     init(container: ModelContainer, contacts: ContactService) {
         self.container = container
         self.contacts = contacts
+    }
+
+    func setDraftProvider(_ provider: any DraftProviding) {
+        draftProvider = provider
     }
 
     nonisolated static func notificationCategory() -> UNNotificationCategory {
@@ -166,9 +171,10 @@ actor NudgeEngine {
     }
 
     private func scheduleNotification(for candidate: NudgeCandidate, notificationID: String, logID: UUID) async {
+        let draft = await draftProvider?.draft(for: DraftContext(from: candidate.input))
         let content = UNMutableNotificationContent()
         content.title = NudgeCopy.notificationTitle(for: candidate)
-        content.body = NudgeCopy.notificationBody(for: candidate)
+        content.body = NudgeCopy.notificationBody(for: candidate, draft: draft)
         content.sound = .default
         content.categoryIdentifier = Self.categoryIdentifier
         content.userInfo = [

@@ -24,11 +24,13 @@ struct NudgeCardView: View {
                 }
                 Spacer()
             }
+            .contentShape(Rectangle())
+            .onTapGesture { showPerson = true }
             HStack {
                 Button {
-                    showPerson = true
+                    services.router.composePersonID = log.personID
                 } label: {
-                    Label(String(localized: "Open"), systemImage: "person.crop.circle")
+                    Label(String(localized: "Message"), systemImage: "paperplane.fill")
                 }
                 .buttonStyle(.borderedProminent)
 

@@ -37,6 +37,6 @@ env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -s
 
 ## Milestone status
 
-- M1 (skeleton) / M2 (people) / M3 (nudge engine): built.
-- M4 (Foundation Models extraction + drafts + Compose): not started — `MentionReviewSheet` is the manual fallback that stays.
+- M1 (skeleton) / M2 (people) / M3 (nudge engine) / M4 (AI): built.
+- M4 notes: the app depends on Foundation Models only through the `ExtractionProviding`/`DraftProviding` seams in `Services/AIProviders.swift`; `@Generable` types are private to `ExtractionService`. Every AI draft passes `DraftSanitizer` (tone guard) before display. `MentionReviewSheet` remains the manual fallback for unavailable-model states. `LiveModelSmokeTests` exercises the real model and no-ops where Apple Intelligence is off.
 - M5 (FaceID lock, export, Icon Composer icon, lock-screen widget, TestFlight): not started. Settings shows "Coming soon" rows.

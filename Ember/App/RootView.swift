@@ -59,7 +59,8 @@ extension Binding where Value == UUID? {
     }
 }
 
-/// Fetches a Person by UUID for presentation from notification taps.
+/// Fetches a Person by UUID and opens Compose — the landing point of a
+/// nudge notification tap.
 struct PersonLookupView: View {
     @Query private var people: [Person]
 
@@ -69,7 +70,7 @@ struct PersonLookupView: View {
 
     var body: some View {
         if let person = people.first {
-            PersonDetailView(person: person)
+            ComposeView(person: person)
         } else {
             EmptyStateView(
                 systemImage: "person.crop.circle.badge.questionmark",

@@ -15,8 +15,15 @@ final class AppServices {
     let personSync: PersonSyncService
     let nudgeEngine: NudgeEngine
     let birthdayEngine: BirthdayEngine
+    let extraction: any ExtractionProviding
+    let drafts: any DraftProviding
     let images = ImageStore()
     let router = AppRouter()
+
+    /// In-memory AI suggestions per entry — never persisted: suggestions become
+    /// data only when the user confirms a chip.
+    var entrySuggestions: [UUID: EntrySuggestions] = [:]
+    var modelAvailability: ModelAvailability = .current
 
     init(container: ModelContainer) {
         self.container = container
@@ -25,16 +32,41 @@ final class AppServices {
         self.personSync = PersonSyncService(container: container, contacts: contacts)
         self.nudgeEngine = NudgeEngine(container: container, contacts: contacts)
         self.birthdayEngine = BirthdayEngine(container: container, contacts: contacts)
+        self.extraction = ExtractionService()
+        self.drafts = DraftService()
     }
 
     /// One-time startup work, run from the root view's task.
     func startUp() async {
+        await nudgeEngine.setDraftProvider(drafts)
         await contacts.startObserving()
         let personSync = personSync
         await contacts.onStoreChange { [weak personSync] in
             await personSync?.refreshAll()
         }
         await personSync.refreshAll()
+    }
+
+    /// Fire-and-forget after an entry saves: extract → resolve → publish chips.
+    /// Any failure leaves the entry pending for the manual review sheet.
+    func extractEntry(id: UUID, text: String) async {
+        modelAvailability = .current
+        guard modelAvailability == .available else { return }
+
+        let personRefs: [PersonRef] = ((try? container.mainContext.fetch(FetchDescriptor<Person>())) ?? [])
+            .map { PersonRef(id: $0.id, displayName: $0.displayNameCache) }
+        let contactCandidates = await contacts.nameCandidates()
+
+        var candidateNames = personRefs.map(\.displayName)
+        candidateNames.append(contentsOf: contactCandidates.map(\.displayName))
+        var seen = Set<String>()
+        candidateNames = candidateNames.filter { seen.insert(NameMatcher.fold($0)).inserted }
+
+        guard let result = await extraction.extract(entryText: text, candidateNames: candidateNames) else { return }
+        let suggestions = ExtractionResolver.resolve(result, entryID: id, persons: personRefs, contacts: contactCandidates)
+        if !suggestions.isEmpty {
+            entrySuggestions[id] = suggestions
+        }
     }
 
     /// Called whenever the app becomes active: BGTask is best-effort,
