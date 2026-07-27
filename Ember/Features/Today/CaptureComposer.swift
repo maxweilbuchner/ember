@@ -33,13 +33,14 @@ struct CaptureComposer: View {
             }
         }
         .toolbar {
-            // Without this there is no way to close the keyboard on device:
-            // the multiline return key inserts a newline and the tab bar sits
-            // underneath the keyboard.
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(String(localized: "Done")) {
-                    isFocused = false
+            // Standard iOS pattern (Notes): a nav-bar Done while editing.
+            // A keyboard-toolbar item is wrong here — iOS 26 docks it as a
+            // floating pill that collides with the tab bar.
+            if isFocused {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) {
+                        isFocused = false
+                    }
                 }
             }
         }

@@ -45,10 +45,11 @@ struct ComposeView: View {
         }
         .scrollDismissesKeyboard(.interactively)
         .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
-                Spacer()
-                Button(String(localized: "Done")) {
-                    draftFocused = false
+            if draftFocused {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "Done")) {
+                        draftFocused = false
+                    }
                 }
             }
         }
