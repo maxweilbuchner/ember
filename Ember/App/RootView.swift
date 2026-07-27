@@ -42,6 +42,7 @@ struct RootView: View {
                 PersonLookupView(personID: target.id)
             }
         }
+        .privacyShield()
     }
 }
 

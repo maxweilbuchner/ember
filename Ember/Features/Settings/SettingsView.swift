@@ -49,8 +49,10 @@ struct SettingsView: View {
                 }
 
                 Section(String(localized: "Privacy & data")) {
-                    LabeledContent(String(localized: "App lock"), value: String(localized: "Coming soon"))
-                    LabeledContent(String(localized: "Export"), value: String(localized: "Coming soon"))
+                    Toggle(String(localized: "App lock (Face ID)"), isOn: lockBinding)
+                    NavigationLink(String(localized: "Export & delete")) {
+                        ExportView()
+                    }
                 }
 
                 Section(String(localized: "About")) {
@@ -75,6 +77,17 @@ struct SettingsView: View {
                 services.modelAvailability = .current
             }
         }
+    }
+
+    /// Toggling in either direction runs an auth check; on failure the toggle
+    /// snaps back (SecurityService only persists after success).
+    private var lockBinding: Binding<Bool> {
+        Binding(
+            get: { services.security.isLockEnabled },
+            set: { newValue in
+                Task { await services.security.setLockEnabled(newValue) }
+            }
+        )
     }
 
     private var contactStatusText: String {

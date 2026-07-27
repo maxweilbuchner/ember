@@ -17,6 +17,8 @@ final class AppServices {
     let birthdayEngine: BirthdayEngine
     let extraction: any ExtractionProviding
     let drafts: any DraftProviding
+    let export: ExportService
+    let security = SecurityService()
     let images = ImageStore()
     let router = AppRouter()
 
@@ -34,6 +36,7 @@ final class AppServices {
         self.birthdayEngine = BirthdayEngine(container: container, contacts: contacts)
         self.extraction = ExtractionService()
         self.drafts = DraftService()
+        self.export = ExportService(container: container)
     }
 
     /// One-time startup work, run from the root view's task.

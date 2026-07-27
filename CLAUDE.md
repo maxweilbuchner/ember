@@ -37,6 +37,7 @@ env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -s
 
 ## Milestone status
 
-- M1 (skeleton) / M2 (people) / M3 (nudge engine) / M4 (AI): built.
+All milestones M1–M5 are built; the app is feature-complete per `EMBER_SPEC.md` §1.4.
+
 - M4 notes: the app depends on Foundation Models only through the `ExtractionProviding`/`DraftProviding` seams in `Services/AIProviders.swift`; `@Generable` types are private to `ExtractionService`. Every AI draft passes `DraftSanitizer` (tone guard) before display. `MentionReviewSheet` remains the manual fallback for unavailable-model states. `LiveModelSmokeTests` exercises the real model and no-ops where Apple Intelligence is off.
-- M5 (FaceID lock, export, Icon Composer icon, lock-screen widget, TestFlight): not started. Settings shows "Coming soon" rows.
+- M5 notes: `SecurityService` (injectable authenticator; never bricks when no passcode is set), `PrivacyShield` on RootView, `ExportService` (zip via `NSFileCoordinator .forUploading`; delete uses fetch-and-delete because batch `delete(model:)` skips in-memory stores), `EmberCaptureWidget` app-extension target (third target in pbxproj — its embed phase needs the explicit PBXBuildFile entries, unlike synchronized sources). App icon is a programmatic draft: `Scripts/draw_icon.swift` renders it; re-run it and copy the PNG into the appiconset to iterate. TestFlight steps in `RELEASING.md` (needs the user's Apple ID).
