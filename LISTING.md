@@ -49,11 +49,11 @@ Draft copy for the App Store Connect version page and TestFlight. Character limi
 
 ## URLs
 
-- Support URL: `https://<pages-domain>/#support`
-- Privacy Policy URL: `https://<pages-domain>/#privacy`
+- Support URL: `https://maxweilbuchner.github.io/ember/#support`
+- Privacy Policy URL: `https://maxweilbuchner.github.io/ember/#privacy`
 - Marketing URL: optional, same page.
 
-(Page lives at `docs/index.html`, ready for GitHub Pages → main branch, `/docs` folder.)
+(Served by GitHub Pages from `docs/index.html` on `main`.)
 
 ## TestFlight — Test Information
 
