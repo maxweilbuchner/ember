@@ -51,6 +51,7 @@ struct TodayView: View {
                 }
                 .padding()
             }
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(String(localized: "Today"))
             .task {
                 birthdays = await services.birthdayEngine.upcoming(withinDays: 7)

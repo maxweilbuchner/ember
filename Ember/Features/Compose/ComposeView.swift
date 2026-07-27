@@ -17,6 +17,7 @@ struct ComposeView: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.scenePhase) private var scenePhase
 
+    @FocusState private var draftFocused: Bool
     @State private var draft = ""
     @State private var isGenerating = false
     @State private var phoneNumber: String?
@@ -41,6 +42,15 @@ struct ComposeView: View {
                 sendButtons
             }
             .padding()
+        }
+        .scrollDismissesKeyboard(.interactively)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(String(localized: "Done")) {
+                    draftFocused = false
+                }
+            }
         }
         .navigationTitle(person.displayNameCache)
         .navigationBarTitleDisplayMode(.inline)
@@ -149,6 +159,7 @@ struct ComposeView: View {
                 .disabled(isGenerating)
             }
             TextEditor(text: $draft)
+                .focused($draftFocused)
                 .frame(minHeight: 90)
                 .padding(10)
                 .scrollContentBackground(.hidden)

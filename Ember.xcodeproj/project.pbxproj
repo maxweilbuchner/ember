@@ -7,15 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		BB0000000000000000000013 /* EmberCaptureWidget.appex in Embed Foundation Extensions */ = {
-			isa = PBXBuildFile;
-			fileRef = BB0000000000000000000002 /* EmberCaptureWidget.appex */;
-			settings = {
-				ATTRIBUTES = (
-					RemoveHeadersOnCopy,
-				);
-			};
-		};
+		BB0000000000000000000013 /* EmberCaptureWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BB0000000000000000000002 /* EmberCaptureWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -48,6 +40,12 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		AA0000000000000000000011 /* Ember.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Ember.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000021 /* EmberTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = EmberTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		BB0000000000000000000002 /* EmberCaptureWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = EmberCaptureWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
 		AA0000000000000000000019 /* Exceptions for "Ember" folder in "Ember" target */ = {
@@ -89,30 +87,6 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
-
-/* Begin PBXFileReference section */
-		AA0000000000000000000011 /* Ember.app */ = {
-			isa = PBXFileReference;
-			explicitFileType = wrapper.application;
-			includeInIndex = 0;
-			path = Ember.app;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		AA0000000000000000000021 /* EmberTests.xctest */ = {
-			isa = PBXFileReference;
-			explicitFileType = wrapper.cfbundle;
-			includeInIndex = 0;
-			path = EmberTests.xctest;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-		BB0000000000000000000002 /* EmberCaptureWidget.appex */ = {
-			isa = PBXFileReference;
-			explicitFileType = "wrapper.app-extension";
-			includeInIndex = 0;
-			path = EmberCaptureWidget.appex;
-			sourceTree = BUILT_PRODUCTS_DIR;
-		};
-/* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		AA0000000000000000000013 /* Frameworks */ = {
@@ -186,28 +160,6 @@
 			productReference = AA0000000000000000000011 /* Ember.app */;
 			productType = "com.apple.product-type.application";
 		};
-		BB0000000000000000000001 /* EmberCaptureWidget */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = BB0000000000000000000006 /* Build configuration list for PBXNativeTarget "EmberCaptureWidget" */;
-			buildPhases = (
-				BB0000000000000000000003 /* Sources */,
-				BB0000000000000000000004 /* Frameworks */,
-				BB0000000000000000000005 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				BB0000000000000000000009 /* EmberCaptureWidget */,
-			);
-			name = EmberCaptureWidget;
-			packageProductDependencies = (
-			);
-			productName = EmberCaptureWidget;
-			productReference = BB0000000000000000000002 /* EmberCaptureWidget.appex */;
-			productType = "com.apple.product-type.app-extension";
-		};
 		AA0000000000000000000020 /* EmberTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = AA0000000000000000000025 /* Build configuration list for PBXNativeTarget "EmberTests" */;
@@ -229,6 +181,28 @@
 			productName = EmberTests;
 			productReference = AA0000000000000000000021 /* EmberTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BB0000000000000000000001 /* EmberCaptureWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB0000000000000000000006 /* Build configuration list for PBXNativeTarget "EmberCaptureWidget" */;
+			buildPhases = (
+				BB0000000000000000000003 /* Sources */,
+				BB0000000000000000000004 /* Frameworks */,
+				BB0000000000000000000005 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				BB0000000000000000000009 /* EmberCaptureWidget */,
+			);
+			name = EmberCaptureWidget;
+			packageProductDependencies = (
+			);
+			productName = EmberCaptureWidget;
+			productReference = BB0000000000000000000002 /* EmberCaptureWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -320,6 +294,82 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		AA0000000000000000000016 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U7YD5SS9RP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Ember/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000017 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U7YD5SS9RP;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Ember/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		AA0000000000000000000026 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ember.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ember";
+			};
+			name = Debug;
+		};
+		AA0000000000000000000027 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ember.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ember";
+			};
+			name = Release;
+		};
 		AA0000000000000000000032 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -385,87 +435,12 @@
 			};
 			name = Release;
 		};
-		AA0000000000000000000016 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Ember/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Debug;
-		};
-		AA0000000000000000000017 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = Ember/Info.plist;
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/Frameworks",
-				);
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				TARGETED_DEVICE_FAMILY = 1;
-			};
-			name = Release;
-		};
-		AA0000000000000000000026 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ember.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ember";
-			};
-			name = Debug;
-		};
-		AA0000000000000000000027 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.maw.ember.tests;
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				TARGETED_DEVICE_FAMILY = 1;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Ember.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Ember";
-			};
-			name = Release;
-		};
-/* End XCBuildConfiguration section */
-
 		BB0000000000000000000007 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U7YD5SS9RP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EmberCaptureWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Ember;
@@ -488,6 +463,7 @@
 			buildSettings = {
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U7YD5SS9RP;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EmberCaptureWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Ember;
@@ -505,17 +481,9 @@
 			};
 			name = Release;
 		};
+/* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		AA0000000000000000000031 /* Build configuration list for PBXProject "Ember" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AA0000000000000000000032 /* Debug */,
-				AA0000000000000000000033 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		AA0000000000000000000015 /* Build configuration list for PBXNativeTarget "Ember" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -530,6 +498,15 @@
 			buildConfigurations = (
 				AA0000000000000000000026 /* Debug */,
 				AA0000000000000000000027 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000031 /* Build configuration list for PBXProject "Ember" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000032 /* Debug */,
+				AA0000000000000000000033 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
