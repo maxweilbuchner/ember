@@ -7,6 +7,13 @@ import Foundation
 nonisolated enum DeepLink: Equatable, Sendable {
     case capture
     case compose(UUID)
+    #if DEBUG
+    // Screenshot-script navigation (Scripts/screenshots.sh):
+    // ember://tab/<today|people|journal>, ember://person/<uuid>, ember://settings
+    case tab(AppTab)
+    case person(UUID)
+    case settings
+    #endif
 
     init?(url: URL) {
         guard url.scheme?.lowercased() == "ember" else { return nil }
@@ -16,6 +23,20 @@ nonisolated enum DeepLink: Equatable, Sendable {
         case "compose":
             guard let personID = url.pathComponents.dropFirst().first.flatMap(UUID.init) else { return nil }
             self = .compose(personID)
+        #if DEBUG
+        case "tab":
+            switch url.pathComponents.dropFirst().first?.lowercased() {
+            case "today": self = .tab(.today)
+            case "people": self = .tab(.people)
+            case "journal": self = .tab(.journal)
+            default: return nil
+            }
+        case "person":
+            guard let personID = url.pathComponents.dropFirst().first.flatMap(UUID.init) else { return nil }
+            self = .person(personID)
+        case "settings":
+            self = .settings
+        #endif
         default:
             return nil
         }

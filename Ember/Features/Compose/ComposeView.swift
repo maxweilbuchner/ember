@@ -82,6 +82,10 @@ struct ComposeView: View {
             }
         }
         .task {
+            #if DEBUG
+            // Demo people are unlinked; a stand-in number keeps the real send button in shot.
+            if DemoSeed.isActive { phoneNumber = "+15550100" }
+            #endif
             if let contactID = person.contactID {
                 let resolved = await services.contacts.resolve(contactID)
                 phoneNumber = resolved?.phoneNumbers.first?.number

@@ -49,6 +49,10 @@ struct CaptureComposer: View {
             // returning from another tab must not steal focus back.
             if !hasAutoFocused {
                 hasAutoFocused = true
+                #if DEBUG
+                // Screenshot runs need the Today content, not the keyboard.
+                if DemoSeed.isActive { return }
+                #endif
                 isFocused = true
             }
         }

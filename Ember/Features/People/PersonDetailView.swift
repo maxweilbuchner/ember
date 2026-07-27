@@ -20,6 +20,13 @@ struct PersonDetailView: View {
         person.contactID != nil && checkedResolution && resolvedContact == nil
     }
 
+    private var showsRelinkSection: Bool {
+        #if DEBUG
+        if DemoSeed.isActive { return false }
+        #endif
+        return person.contactID == nil || isUnresolvable
+    }
+
     private var timeline: [TimelineItem] {
         let interactions = person.interactions.map(TimelineItem.interaction)
         let mentions = person.mentions.map(TimelineItem.mention)
@@ -29,7 +36,7 @@ struct PersonDetailView: View {
     var body: some View {
         List {
             headerSection
-            if person.contactID == nil || isUnresolvable {
+            if showsRelinkSection {
                 relinkSection
             }
             Section {

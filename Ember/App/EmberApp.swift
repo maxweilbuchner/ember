@@ -27,6 +27,12 @@ struct EmberApp: App {
         let services = AppServices(container: container)
         _services = State(initialValue: services)
 
+        #if DEBUG
+        if DemoSeed.isActive {
+            DemoSeed.apply(container: container, services: services)
+        }
+        #endif
+
         // Delegate assignment, category registration, and BGTask registration must
         // all happen before the app finishes launching — hence here in App.init.
         let delegate = NotificationDelegate(engine: services.nudgeEngine, router: services.router)

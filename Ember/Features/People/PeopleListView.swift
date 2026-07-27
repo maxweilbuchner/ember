@@ -4,6 +4,7 @@ import SwiftData
 import SwiftUI
 
 struct PeopleListView: View {
+    @Environment(AppServices.self) private var services
     @Query(sort: \Person.displayNameCache) private var people: [Person]
     @State private var showSettings = false
     @State private var showAddPeople = false
@@ -13,6 +14,7 @@ struct PeopleListView: View {
     }
 
     var body: some View {
+        @Bindable var router = services.router
         NavigationStack {
             Group {
                 if people.isEmpty {
@@ -40,6 +42,28 @@ struct PeopleListView: View {
                     }
                 }
             }
+            #if DEBUG
+            // Programmatic navigation for the DEBUG deep links (screenshot script).
+            .navigationDestination(item: $router.detailPersonID.asIdentifiable) { target in
+                if let person = people.first(where: { $0.id == target.id }) {
+                    PersonDetailView(person: person)
+                }
+            }
+            .onChange(of: router.settingsRequested) { _, requested in
+                if requested {
+                    showSettings = true
+                    router.settingsRequested = false
+                }
+            }
+            // The deep link can switch to this tab and request settings in the same
+            // tick — before onChange is mounted — so check again on appear.
+            .onAppear {
+                if router.settingsRequested {
+                    showSettings = true
+                    router.settingsRequested = false
+                }
+            }
+            #endif
             .navigationTitle(String(localized: "People"))
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

@@ -40,5 +40,14 @@ amber→terracotta on warm charcoal.
 - [x] Export + delete-everything shipped (§4.6)
 - [x] No guilt mechanics anywhere (§1.3) — guarded by CopyToneTests
 - [x] All permission strings honest and specific
-- [ ] Trademark check
-- [ ] Screenshots + listing copy
+- [x] Trademark check — searched 2026-07-27, see notes below
+- [x] Screenshots — `Scripts/screenshots.sh` regenerates `Screenshots/` from seeded demo data (listing copy in `LISTING.md`; privacy/support page in `docs/index.html`)
+
+## Trademark search notes (2026-07-27, TMview API + USPTO web records — not legal advice)
+
+"EMBER" as a word mark is heavily occupied in Class 9/42 in both registries:
+
+- **EUIPO (registered word marks):** Sony Interactive Entertainment "Ember" (012674198, cl. 9/28/41, game); Eelmets Patendibüroo OÜ "EMBER" (019185759, cl. 9/39/42, reg. Oct 2025); Silicon Labs "EMBER" (002516672, cl. 9, chips); Willow Laboratories "EMBER" (013537345, cl. 9/10/44, health); Sandbag Climate "Ember" (018269556, cl. 42/45). Plus at least one pending (019335510).
+- **USPTO:** Tilde Inc. "EMBER" (88446133, cl. 9 — the Ember.js framework); Ember Technologies (mug company) holds EMBER marks but in medical-container/hardware goods, not personal-productivity apps; various EMBER-prefixed marks (TECH EMBER, EMBER INTERACTIVE, EMBERAI).
+
+Assessment: no registration found for an identical mark covering a personal-CRM/relationship app specifically, but multiple live identical marks exist in Class 9 broadly. Many unrelated EMBERs already coexist across software niches, which cuts both ways. The suffixed listing name ("Ember — thoughtful check-ins") helps discoverability but is not legal clearance. For a free indie app the practical risk is low; before any paid/commercial push, have a trademark attorney run a real clearance.

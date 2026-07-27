@@ -34,8 +34,18 @@ final class AppServices {
         self.personSync = PersonSyncService(container: container, contacts: contacts)
         self.nudgeEngine = NudgeEngine(container: container, contacts: contacts)
         self.birthdayEngine = BirthdayEngine(container: container, contacts: contacts)
+        #if DEBUG
+        if DemoSeed.isActive {
+            self.extraction = DemoExtractionProvider()
+            self.drafts = DemoDraftProvider()
+        } else {
+            self.extraction = ExtractionService()
+            self.drafts = DraftService()
+        }
+        #else
         self.extraction = ExtractionService()
         self.drafts = DraftService()
+        #endif
         self.export = ExportService(container: container)
     }
 
@@ -88,6 +98,11 @@ final class AppRouter {
     var captureRequested = false
     /// Person to open from a nudge notification tap; Compose proper arrives in M4.
     var composePersonID: UUID?
+    #if DEBUG
+    // Driven by the DEBUG deep links (screenshot script) only.
+    var detailPersonID: UUID?
+    var settingsRequested = false
+    #endif
 
     func handle(_ link: DeepLink) {
         switch link {
@@ -96,6 +111,19 @@ final class AppRouter {
             captureRequested = true
         case .compose(let personID):
             composePersonID = personID
+        #if DEBUG
+        case .tab(let tab):
+            composePersonID = nil
+            selectedTab = tab
+        case .person(let personID):
+            composePersonID = nil
+            selectedTab = .people
+            detailPersonID = personID
+        case .settings:
+            composePersonID = nil
+            selectedTab = .people
+            settingsRequested = true
+        #endif
         }
     }
 }

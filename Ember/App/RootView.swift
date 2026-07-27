@@ -24,6 +24,13 @@ struct RootView: View {
         .fontDesign(.rounded)
         .task {
             await services.startUp()
+            #if DEBUG
+            // Screenshot script: navigate via launch argument (see DemoSeed.linkURL).
+            if DemoSeed.isActive, let url = DemoSeed.linkURL, let link = DeepLink(url: url) {
+                try? await Task.sleep(for: .seconds(1))
+                services.router.handle(link)
+            }
+            #endif
         }
         .onOpenURL { url in
             if let link = DeepLink(url: url) {
@@ -47,7 +54,7 @@ struct RootView: View {
 }
 
 /// Wraps a bare UUID binding so it can drive `.sheet(item:)`.
-nonisolated struct IdentifiableUUID: Identifiable, Equatable, Sendable {
+nonisolated struct IdentifiableUUID: Identifiable, Hashable, Sendable {
     let id: UUID
 }
 
