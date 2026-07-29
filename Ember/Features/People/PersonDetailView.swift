@@ -93,6 +93,18 @@ struct PersonDetailView: View {
         }
     }
 
+    private var birthdayText: String? {
+        guard let month = person.manualBirthdayMonth, let day = person.manualBirthdayDay else { return nil }
+        let formatter = DateFormatter()
+        formatter.dateFormat = person.manualBirthdayYear != nil ? "MMMM d, yyyy" : "MMMM d"
+        var components = DateComponents()
+        components.month = month
+        components.day = day
+        components.year = person.manualBirthdayYear
+        guard let date = Calendar.current.date(from: components) else { return nil }
+        return formatter.string(from: date)
+    }
+
     private var headerSection: some View {
         Section {
             HStack(spacing: 14) {
@@ -100,6 +112,11 @@ struct PersonDetailView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(person.displayNameCache)
                         .font(.title3.weight(.semibold))
+                    if let birthday = birthdayText {
+                        Text("🎂 \(birthday)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                     if let last = person.interactions.max(by: { $0.date < $1.date }) {
                         Text(NeutralPhrases.lastContact(channel: last.channel, note: last.note, date: last.date))
                             .font(.caption)
