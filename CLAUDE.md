@@ -33,6 +33,7 @@ env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -s
 - All user-facing strings via `String(localized:)` — String Catalog at `Ember/Resources/Localizable.xcstrings`.
 - Nudge/notification copy goes through `NudgeCopy`; elapsed-time display through `NeutralPhrases`. Never show time-since-contact as a deficit or day-count.
 - Never request `CNContactNoteKey`. Unresolvable contactIDs are a normal state (unlinked Person), not an error.
+- Contacts is read-only except for birthday write-back (`Services/BirthdayWriteBack.swift`, `ContactWriting` seam), which is opt-in per user and clears Ember's manual copy on success. Never add a silent or background write path.
 - Notification scheduling state lives in SwiftData (`NudgeLog.notificationID`, `NudgeRun`, `DateAlertRecord`) — never UserDefaults.
 - Birthday reads go through `BirthdayResolution.effectiveBirthday` (contact-first; manual is the unlinked/missing fallback) — never inline the precedence.
 

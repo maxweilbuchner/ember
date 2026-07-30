@@ -61,6 +61,22 @@ extension ResolvedContact {
     }
 }
 
+/// Records birthday write-backs instead of touching the real address book, and
+/// can refuse them the way a deleted contact or read-only account would.
+actor StubContactWriter: ContactWriting {
+    private(set) var writes: [(contactID: String, birthday: DateComponents?)] = []
+    private var shouldFail = false
+
+    init(shouldFail: Bool = false) {
+        self.shouldFail = shouldFail
+    }
+
+    func setBirthday(_ birthday: DateComponents?, forContactID contactID: String) throws {
+        if shouldFail { throw ContactWriteError.unresolvable }
+        writes.append((contactID, birthday))
+    }
+}
+
 /// A gregorian calendar pinned to an explicit time zone, so date math in tests
 /// is deterministic regardless of the machine running them.
 nonisolated func fixedCalendar(_ timeZoneIdentifier: String = "Europe/Berlin") -> Calendar {

@@ -105,7 +105,11 @@ struct PersonDetailView: View {
         .sheet(isPresented: $showMergeSheet) {
             MergePersonSheet(source: person, onFinished: { dismiss() })
         }
-        .sheet(isPresented: $showBirthdayEditor) {
+        .sheet(isPresented: $showBirthdayEditor, onDismiss: {
+            // A birthday may have just been written to the contact card; the
+            // resolved copy is stale until we re-read it.
+            Task { await reloadResolvedContact() }
+        }) {
             BirthdayEditorSheet(person: person)
         }
         .sheet(isPresented: $showCustomDateSheet) {
@@ -132,15 +136,19 @@ struct PersonDetailView: View {
             Text(removalMessage)
         }
         .task(id: person.contactID) {
-            checkedResolution = false
-            if let contactID = person.contactID {
-                resolvedContact = await services.contacts.resolve(contactID)
-            } else {
-                resolvedContact = nil
-            }
-            checkedResolution = true
+            await reloadResolvedContact()
             await loadRelations()
         }
+    }
+
+    private func reloadResolvedContact() async {
+        checkedResolution = false
+        if let contactID = person.contactID {
+            resolvedContact = await services.contacts.resolve(contactID)
+        } else {
+            resolvedContact = nil
+        }
+        checkedResolution = true
     }
 
     private var removalMessage: String {

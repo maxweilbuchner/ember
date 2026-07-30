@@ -32,6 +32,20 @@ protocol ContactResolving: Sendable {
 
 extension ContactService: ContactResolving {}
 
+/// Writing back to the address book — the only direction in which Ember mutates
+/// Contacts, and only ever with the user's say-so. Separate from reading so the
+/// decision logic can be tested without a live store.
+protocol ContactWriting: Sendable {
+    func setBirthday(_ birthday: DateComponents?, forContactID contactID: String) async throws
+}
+
+extension ContactService: ContactWriting {}
+
+nonisolated enum ContactWriteError: Error {
+    /// The contact is gone, or outside a limited-access selection.
+    case unresolvable
+}
+
 /// Live resolution of `contactID → (name, photo, birthday, phone numbers)` with an
 /// in-memory cache, invalidated on CNContactStoreDidChange. Ember never duplicates
 /// Contacts data into its store — and never requests CNContactNoteKey.
@@ -115,6 +129,28 @@ actor ContactService {
     /// API). nil = not set, or the chosen contact is gone — both normal states.
     func meContact() -> ResolvedContact? {
         MeCard.contactID.flatMap { resolve($0) }
+    }
+
+    // MARK: Writing
+
+    /// Mirrors a birthday onto the linked contact card. Fetching only the
+    /// birthday key is safe: a save applies just the properties that changed
+    /// and leaves un-fetched ones untouched (verified against CNContactStore).
+    /// Throws when the store refuses — contact deleted, outside a limited-access
+    /// selection, or an account that doesn't accept writes.
+    func setBirthday(_ birthday: DateComponents?, forContactID contactID: String) throws {
+        let keys = [CNContactBirthdayKey as CNKeyDescriptor]
+        guard let contact = try? store.unifiedContact(withIdentifier: contactID, keysToFetch: keys),
+              let mutable = contact.mutableCopy() as? CNMutableContact else {
+            throw ContactWriteError.unresolvable
+        }
+        mutable.birthday = birthday
+        let request = CNSaveRequest()
+        request.update(mutable)
+        try store.execute(request)
+        // Our own read caches are now stale for this person.
+        cache[contactID] = nil
+        allContactsCache = nil
     }
 
     // MARK: Change observation

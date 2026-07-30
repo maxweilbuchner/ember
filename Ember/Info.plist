@@ -20,7 +20,7 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>NSContactsUsageDescription</key>
-	<string>Ember links the people you care about to your contacts so it can show their name, photo, and birthday. Contact data never leaves your device.</string>
+	<string>Ember links the people you care about to your contacts so it can show their name, photo, and birthday, and — only when you ask — save a birthday you add back to their card. Contact data never leaves your device.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Unlock Ember with Face ID to keep your journal private.</string>
 	<key>UIBackgroundModes</key>

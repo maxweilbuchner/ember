@@ -8,12 +8,16 @@ import SwiftUI
 /// read-only in Ember by design; those are edited in Contacts.
 struct BirthdayEditorSheet: View {
     @Bindable var person: Person
+    @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @State private var month: Int
     @State private var day: Int
     @State private var includeYear: Bool
     @State private var year: Int
+    /// Remembered, not asked every time — but always visible while saving, so
+    /// writing to someone's address book is never a surprise.
+    @AppStorage("writeBirthdaysToContacts") private var alsoSaveToContacts = false
 
     init(person: Person) {
         self.person = person
@@ -31,12 +35,26 @@ struct BirthdayEditorSheet: View {
                 Section {
                     MonthDayYearPicker(month: $month, day: $day, includeYear: $includeYear, year: $year)
                 }
+                if person.contactID != nil {
+                    Section {
+                        Toggle(String(localized: "Also save to Contacts"), isOn: $alsoSaveToContacts)
+                    } footer: {
+                        Text(String(localized: "Adds the birthday to \(person.displayNameCache)'s contact card on this device. Their card then keeps it — you'd edit it in Contacts from then on."))
+                    }
+                }
                 if person.manualBirthday != nil {
                     Section {
                         Button(String(localized: "Remove birthday"), role: .destructive) {
-                            person.manualBirthday = nil
-                            try? modelContext.save()
-                            dismiss()
+                            Task {
+                                await BirthdayWriteBack.save(
+                                    nil,
+                                    for: person,
+                                    alsoToContacts: alsoSaveToContacts,
+                                    writer: services.contacts,
+                                    context: modelContext
+                                )
+                                dismiss()
+                            }
                         }
                     }
                 }
@@ -49,13 +67,21 @@ struct BirthdayEditorSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "Save")) {
-                        person.manualBirthday = DateComponents(
+                        let birthday = DateComponents(
                             year: includeYear ? year : nil,
                             month: month,
                             day: day
                         )
-                        try? modelContext.save()
-                        dismiss()
+                        Task {
+                            await BirthdayWriteBack.save(
+                                birthday,
+                                for: person,
+                                alsoToContacts: alsoSaveToContacts,
+                                writer: services.contacts,
+                                context: modelContext
+                            )
+                            dismiss()
+                        }
                     }
                 }
             }
