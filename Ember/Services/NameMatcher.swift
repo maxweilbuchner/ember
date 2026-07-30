@@ -45,14 +45,14 @@ nonisolated enum NameMatcher {
         return firstMatches && restMatches
     }
 
-    /// Compact chip display: "Julia Katharina Schwarenthorer" → "Julia S." —
+    /// Compact chip display: "Julia Katharina Schwarenthorer" → "Julia S" —
     /// first name plus last-name initial keeps long names short but still
     /// uniquely identifiable. Single-word names pass through unchanged.
     static func compactName(_ fullName: String) -> String {
         let tokens = fullName.split(separator: " ").map(String.init)
         guard let first = tokens.first else { return fullName.trimmingCharacters(in: .whitespaces) }
         guard tokens.count > 1, let initial = tokens.last?.first else { return first }
-        return "\(first) \(initial)."
+        return "\(first) \(initial)"
     }
 
     static func candidates(matching query: String, in candidates: [NameCandidate]) -> [NameCandidate] {
