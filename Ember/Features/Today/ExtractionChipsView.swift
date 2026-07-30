@@ -33,21 +33,36 @@ struct ExtractionChipsView: View {
         !entry.mentions.isEmpty || !openMentions.isEmpty || !openCommitments.isEmpty
     }
 
+    private var hasSuggestions: Bool {
+        !openMentions.isEmpty || !openCommitments.isEmpty
+    }
+
     var body: some View {
         if hasAnything {
-            LazyVGrid(
-                columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)],
-                alignment: .leading,
-                spacing: EmberTheme.spacingS
-            ) {
-                ForEach(entry.mentions) { person in
-                    tagChip(person)
+            VStack(alignment: .leading, spacing: EmberTheme.spacingM) {
+                if !entry.mentions.isEmpty {
+                    FlowLayout {
+                        ForEach(entry.mentions) { person in
+                            tagChip(person)
+                        }
+                    }
                 }
-                ForEach(openMentions) { mention in
-                    suggestionChip(mention)
-                }
-                ForEach(openCommitments) { commitment in
-                    commitmentChip(commitment)
+                // Applied tags are data; these are still just offers. Keeping
+                // them apart stops the two reading as one undifferentiated row.
+                if hasSuggestions {
+                    VStack(alignment: .leading, spacing: EmberTheme.spacingS) {
+                        Text(String(localized: "Suggested"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        FlowLayout {
+                            ForEach(openMentions) { mention in
+                                suggestionChip(mention)
+                            }
+                            ForEach(openCommitments) { commitment in
+                                commitmentChip(commitment)
+                            }
+                        }
+                    }
                 }
             }
             .animation(EmberTheme.calm, value: entry.mentions.map(\.id))
@@ -72,28 +87,47 @@ struct ExtractionChipsView: View {
 
     // MARK: Chips
 
-    /// An applied tag — tapping the × undoes it (and the interaction it logged).
+    /// An applied tag. Two targets, deliberately: the name opens the person,
+    /// and only the × undoes the tag (and the interaction it logged) — tapping
+    /// a name should never be destructive.
     private func tagChip(_ person: Person) -> some View {
-        Button {
-            MentionApplier.untag(person, from: entry, context: modelContext)
-            writeCount += 1
-        } label: {
-            HStack(spacing: 4) {
-                if person.isPartnerMode {
-                    Image(systemName: "heart.fill")
-                        .font(.caption2)
+        HStack(spacing: 2) {
+            NavigationLink {
+                PersonDetailView(person: person)
+            } label: {
+                HStack(spacing: 4) {
+                    if person.isPartnerMode {
+                        Image(systemName: "heart.fill")
+                            .font(.caption2)
+                    }
+                    Text(NameMatcher.compactName(person.displayNameCache))
+                        .lineLimit(1)
                 }
-                Text(NameMatcher.compactName(person.displayNameCache))
-                    .lineLimit(1)
-                Image(systemName: "xmark")
-                    .font(.caption2)
+                .contentShape(Rectangle())
             }
-            .font(.subheadline)
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Open \(person.displayNameCache)"))
+
+            Button {
+                MentionApplier.untag(person, from: entry, context: modelContext)
+                writeCount += 1
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.vertical, 6)
+                    .padding(.leading, 6)
+                    .padding(.trailing, 2)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "Remove tag \(person.displayNameCache)"))
         }
-        .buttonStyle(.bordered)
-        .tint(Color.accentColor)
-        .controlSize(.small)
-        .accessibilityLabel(String(localized: "Remove tag \(person.displayNameCache)"))
+        .font(.subheadline)
+        .padding(.leading, 12)
+        .padding(.trailing, 8)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+        .foregroundStyle(Color.accentColor)
     }
 
     private func suggestionChip(_ mention: MentionSuggestion) -> some View {

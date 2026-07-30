@@ -19,8 +19,8 @@ struct EntryDetailView: View {
                 Text(entry.text)
                     .textSelection(.enabled)
                 if !entry.mentions.isEmpty {
-                    // Adaptive grid so many mentions wrap instead of clipping.
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)], alignment: .leading, spacing: EmberTheme.spacingS) {
+                    // Flows so chips keep their natural width and wrap.
+                    FlowLayout {
                         ForEach(entry.mentions) { person in
                             EmberChip(
                                 text: NameMatcher.compactName(person.displayNameCache),

@@ -15,31 +15,36 @@ struct TodayEntryCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: EmberTheme.spacingS) {
+        VStack(alignment: .leading, spacing: EmberTheme.spacingM) {
             NavigationLink {
                 EntryDetailView(entry: entry)
             } label: {
-                Text(entry.previewLine)
-                    .lineLimit(2)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentShape(Rectangle())
+                HStack(alignment: .firstTextBaseline, spacing: EmberTheme.spacingS) {
+                    Text(entry.previewLine)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text(entry.date, style: .time)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            ExtractionChipsView(entry: entry, suggestions: services.entrySuggestions[entry.id])
-
-            HStack(spacing: EmberTheme.spacingXS) {
-                if isExtracting {
+            if isExtracting {
+                HStack(spacing: EmberTheme.spacingXS) {
                     ProgressView()
                         .controlSize(.mini)
                     Text(String(localized: "Looking for people…"))
-                } else {
-                    Text(entry.date, style: .time)
                 }
-                Spacer()
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
-            .font(.caption)
-            .foregroundStyle(.secondary)
+
+            ExtractionChipsView(entry: entry, suggestions: services.entrySuggestions[entry.id])
         }
         .emberCard()
         .animation(EmberTheme.calm, value: isExtracting)
