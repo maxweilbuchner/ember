@@ -26,6 +26,39 @@ struct LiveModelSmokeTests {
         #expect(result.people.contains { $0.name.localizedCaseInsensitiveContains("anna") })
     }
 
+    @Test(.timeLimit(.minutes(2))) func extractionPipelineStaysGroundedInEntryText() async {
+        guard ModelAvailability.current == .available else { return }
+        let service = ExtractionService()
+        let text = "I must met Oliver"
+        let result = await service.extract(
+            entryText: text,
+            candidateNames: ["Anna Lopez", "Julia Schmidt", "Kate Bell", "Daniel Higgins Jr.", "John Appleseed", "Hank M. Zakroff", "David Taylor"]
+        )
+        guard let result else {
+            Issue.record("model available but extraction returned nil")
+            return
+        }
+        print("Live raw extraction: \(result.people.map(\.name))")
+
+        // Prompt-quality probe: the small model may still echo reference names
+        // despite the hardened instructions — visible here, but intermittent
+        // and not a failure. The deterministic filter below is the guarantee.
+        withKnownIssue("small model may echo the reference list", isIntermittent: true) {
+            for person in result.people {
+                let firstToken = person.name.split(separator: " ").first.map(String.init) ?? person.name
+                #expect(text.localizedCaseInsensitiveContains(firstToken), "echoed: \(person.name)")
+            }
+        }
+
+        // The pipeline guarantee users actually see: after grounding, nothing
+        // outside the entry text survives.
+        let grounded = ExtractionResolver.grounded(result, in: text)
+        #expect(
+            grounded.people.allSatisfy { $0.name.localizedCaseInsensitiveContains("oliver") },
+            "after grounding only Oliver may remain, got \(grounded.people.map(\.name))"
+        )
+    }
+
     @Test(.timeLimit(.minutes(2))) func draftGeneratesAndPassesSanitizer() async {
         guard ModelAvailability.current == .available else { return }
         let service = DraftService()

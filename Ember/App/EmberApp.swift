@@ -41,7 +41,7 @@ struct EmberApp: App {
         center.delegate = delegate
         center.setNotificationCategories([NudgeEngine.notificationCategory()])
 
-        Self.registerBackgroundTasks(nudgeEngine: services.nudgeEngine, birthdayEngine: services.birthdayEngine)
+        Self.registerBackgroundTasks(nudgeEngine: services.nudgeEngine, dateEngine: services.dateEngine)
     }
 
     var body: some Scene {
@@ -52,12 +52,12 @@ struct EmberApp: App {
         .environment(services)
     }
 
-    private static func registerBackgroundTasks(nudgeEngine: NudgeEngine, birthdayEngine: BirthdayEngine) {
+    private static func registerBackgroundTasks(nudgeEngine: NudgeEngine, dateEngine: DateEngine) {
         BGTaskScheduler.shared.register(forTaskWithIdentifier: NudgeEngine.taskIdentifier, using: nil) { task in
             nonisolated(unsafe) let task = task
             let work = Task {
                 await nudgeEngine.evaluate()
-                await birthdayEngine.refresh()
+                await dateEngine.refresh()
                 task.setTaskCompleted(success: true)
             }
             task.expirationHandler = { work.cancel() }

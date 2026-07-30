@@ -33,6 +33,50 @@ struct ExtractionResolverTests {
         )
     }
 
+    // MARK: Grounding filter
+
+    @Test func regurgitatedCandidateNamesAreDropped() {
+        // The exact field repro: entry names only Oliver, the model echoed the
+        // candidate list back.
+        let raw = result(names: ["Oliver", "Anna", "Kate Bell", "Daniel Higgins Jr.", "John Appleseed"])
+        let grounded = ExtractionResolver.grounded(raw, in: "I must met Oliver")
+        #expect(grounded.people.map(\.name) == ["Oliver"])
+    }
+
+    @Test func normalisedFullNameIsTrimmedBackToWhatWasWritten() {
+        // The model reached for a reference spelling; resolution should still
+        // match on the word the user actually wrote.
+        let raw = result(names: ["Julia Katharina Schwarenthorer"])
+        let grounded = ExtractionResolver.grounded(raw, in: "Coffee with Julia — she got the offer!")
+        #expect(grounded.people.map(\.name) == ["Julia"])
+    }
+
+    @Test func expandedNameDoesNotSmuggleInADifferentPerson() {
+        // Field repro: entry says "Anna", model echoed contact "Anna Haro".
+        // Trimming to "Anna" keeps it resolvable to the Anna the user knows.
+        let raw = result(names: ["Anna Haro"])
+        let grounded = ExtractionResolver.grounded(raw, in: "Lunch with Anna to celebrate")
+        #expect(grounded.people.map(\.name) == ["Anna"])
+    }
+
+    @Test func matchingIsCaseAndDiacriticInsensitiveOnWordBoundaries() {
+        let kept = ExtractionResolver.grounded(result(names: ["Tomáš"]), in: "met tomas at the gym")
+        #expect(kept.people.count == 1)
+
+        let dropped = ExtractionResolver.grounded(result(names: ["Anna"]), in: "reading the annals of history")
+        #expect(dropped.people.isEmpty, "substring hits inside other words must not ground a name")
+    }
+
+    @Test func implausibleCommitmentPersonNameIsNulledButCommitmentStays() {
+        let raw = result(
+            names: ["Oliver"],
+            commitments: [ExtractedCommitment(text: "send the book", personName: "Kate Bell")]
+        )
+        let grounded = ExtractionResolver.grounded(raw, in: "I must met Oliver and promised him the book")
+        #expect(grounded.commitments.count == 1)
+        #expect(grounded.commitments.first?.personName == nil)
+    }
+
     @Test func existingPersonBeatsContactWithSameName() {
         let outcome = ExtractionResolver.resolveName("Julia", persons: persons, contacts: contacts)
         #expect(outcome == .person(juliaID), "Julia is both a Person and a contact — the Person wins")

@@ -45,6 +45,7 @@ struct ModelSchemaTests {
         context.insert(Interaction(person: person, channel: .call))
         context.insert(Commitment(person: person, text: "send the book"))
         context.insert(Idea(person: person, text: "birthday hike"))
+        context.insert(CustomDate(person: person, label: "Anniversary", month: 6, day: 15))
         try context.save()
 
         context.delete(person)
@@ -53,6 +54,23 @@ struct ModelSchemaTests {
         #expect(try context.fetch(FetchDescriptor<Interaction>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<Commitment>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<Idea>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<CustomDate>()).isEmpty)
+    }
+
+    @Test func customDateRoundTripWithOptionalYear() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let person = Person(displayNameCache: "Anna")
+        context.insert(person)
+        context.insert(CustomDate(person: person, label: "First met", month: 2, day: 29))
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<CustomDate>())
+        #expect(fetched.first?.label == "First met")
+        #expect(fetched.first?.month == 2)
+        #expect(fetched.first?.day == 29)
+        #expect(fetched.first?.year == nil)
+        #expect(fetched.first?.person?.id == person.id)
     }
 
     @Test func deletingPersonKeepsJournalEntries() throws {
@@ -91,6 +109,30 @@ struct ModelSchemaTests {
     @Test func entryPreviewLineSkipsBlankLines() {
         let entry = Entry(text: "\n\n  \nActual first line\nSecond line")
         #expect(entry.previewLine == "Actual first line")
+    }
+
+    @Test func manualRelationRoundTrip() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let person = Person(displayNameCache: "Mum")
+        person.manualRelation = .mother
+        context.insert(person)
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<Person>())
+        #expect(fetched.first?.manualRelation == .mother)
+        #expect(fetched.first?.manualRelationRaw == "mother")
+        #expect(fetched.first?.isPartnerMode == false, "relation labels never touch partner mode")
+    }
+
+    @Test func dateAlertRecordRoundTrip() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        context.insert(DateAlertRecord(identifier: "birthday-x-2026-06-15-day"))
+        try context.save()
+
+        let fetched = try context.fetch(FetchDescriptor<DateAlertRecord>())
+        #expect(fetched.first?.identifier == "birthday-x-2026-06-15-day")
     }
 
     @Test func nudgeLogSurvivesPersonDeletion() throws {

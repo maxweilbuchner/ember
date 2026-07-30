@@ -19,13 +19,13 @@ struct EntryDetailView: View {
                 Text(entry.text)
                     .textSelection(.enabled)
                 if !entry.mentions.isEmpty {
-                    HStack(spacing: 8) {
+                    // Adaptive grid so many mentions wrap instead of clipping.
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 110), alignment: .leading)], alignment: .leading, spacing: EmberTheme.spacingS) {
                         ForEach(entry.mentions) { person in
-                            Text(person.displayNameCache)
-                                .font(.caption)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 5)
-                                .background(Capsule().fill(Color.accentColor.opacity(0.15)))
+                            EmberChip(
+                                text: NameMatcher.compactName(person.displayNameCache),
+                                systemImage: person.isPartnerMode ? "heart.fill" : nil
+                            )
                         }
                     }
                 }
@@ -33,6 +33,7 @@ struct EntryDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
         }
+        .emberCanvas()
         .navigationTitle(String(localized: "Entry"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -51,17 +52,21 @@ struct EntryDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
+                .accessibilityLabel(String(localized: "More options"))
             }
         }
         .sheet(isPresented: $showReview) {
             MentionReviewSheet(entry: entry)
         }
-        .confirmationDialog(String(localized: "Delete this entry?"), isPresented: $confirmDelete, titleVisibility: .visible) {
+        .alert(String(localized: "Delete this entry?"), isPresented: $confirmDelete) {
             Button(String(localized: "Delete"), role: .destructive) {
                 modelContext.delete(entry)
                 try? modelContext.save()
                 dismiss()
             }
+            Button(String(localized: "Cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "This can't be undone."))
         }
     }
 }

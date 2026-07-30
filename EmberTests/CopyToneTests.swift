@@ -11,6 +11,7 @@ struct CopyToneTests {
     private func candidate(
         note: String? = nil,
         daysUntilBirthday: Int? = nil,
+        customDate: (label: String, daysAway: Int)? = nil,
         commitments: [String] = []
     ) -> NudgeCandidate {
         let input = ScoringInput(
@@ -21,6 +22,8 @@ struct CopyToneTests {
             daysSinceLastInteraction: 94, // the spec's own anti-example: "94 days"
             daysSinceCreated: 200,
             daysUntilBirthday: daysUntilBirthday,
+            daysUntilCustomDate: customDate?.daysAway,
+            customDateLabel: customDate?.label,
             openCommitmentCount: commitments.count,
             daysSinceLastNudgeEvent: nil,
             lastInteractionNote: note,
@@ -29,6 +32,7 @@ struct CopyToneTests {
         )
         var reasons: [NudgeReason] = [.beenAWhile]
         if let daysUntilBirthday { reasons.append(.birthdaySoon(daysAway: daysUntilBirthday)) }
+        if let customDate { reasons.append(.customDateSoon(label: customDate.label, daysAway: customDate.daysAway)) }
         if !commitments.isEmpty { reasons.append(.openCommitments(commitments)) }
         return NudgeCandidate(input: input, score: 3.0, reasons: reasons)
     }
@@ -65,6 +69,48 @@ struct CopyToneTests {
     @Test func commitmentsAppearInBody() {
         let body = NudgeCopy.notificationBody(for: candidate(commitments: ["send Daniel that book"]))
         #expect(body.contains("send Daniel that book"))
+    }
+
+    @Test func customDateCopyIsForwardLookingAndCarriesTheLabel() {
+        let today = NudgeCopy.notificationBody(for: candidate(customDate: ("Anniversary", 0)))
+        #expect(today.contains("anniversary today"))
+        let tomorrow = NudgeCopy.notificationBody(for: candidate(customDate: ("Anniversary", 1)))
+        #expect(tomorrow.contains("tomorrow"))
+        let inFour = NudgeCopy.notificationBody(for: candidate(customDate: ("Anniversary", 4)))
+        #expect(inFour.contains("anniversary is in 4 days"))
+        for body in [today, tomorrow, inFour] {
+            #expect(!body.localizedCaseInsensitiveContains("ago"), "\(body)")
+            #expect(!body.localizedCaseInsensitiveContains("overdue"), "\(body)")
+            #expect(!body.localizedCaseInsensitiveContains("haven't"), "\(body)")
+        }
+    }
+
+    @Test func customDateReasonLineNamesTheOccasion() {
+        let reason = NudgeCopy.reasonLine(for: candidate(customDate: ("First met", 3)))
+        #expect(reason.contains("first met in 3 days"))
+    }
+
+    @Test func customDateNotificationTitlesReadNaturally() {
+        #expect(NudgeCopy.customDateDayOfTitle(name: "Anna", label: "Anniversary") == "It's Anna's anniversary today")
+        #expect(NudgeCopy.customDateHeadsUpTitle(name: "Anna", label: "Anniversary") == "Anna's anniversary is in 3 days")
+    }
+
+    @Test func birthdayNotificationCopyIsForwardLookingAndGuiltFree() {
+        let strings = [
+            NudgeCopy.birthdayDayOfTitle(name: "Anna"),
+            NudgeCopy.birthdayDayOfBody(),
+            NudgeCopy.birthdayHeadsUpTitle(name: "Anna"),
+            NudgeCopy.birthdayHeadsUpBody(),
+        ]
+        for string in strings {
+            #expect(!string.localizedCaseInsensitiveContains("ago"), "\(string)")
+            #expect(!string.localizedCaseInsensitiveContains("overdue"), "\(string)")
+            #expect(!string.localizedCaseInsensitiveContains("haven't"), "\(string)")
+        }
+        // The only digit across all four is the forward-facing "in 3 days".
+        let digitBearing = strings.filter { $0.contains { $0.isNumber } }
+        #expect(digitBearing == [NudgeCopy.birthdayHeadsUpTitle(name: "Anna")])
+        #expect(NudgeCopy.birthdayHeadsUpTitle(name: "Anna").contains("in 3 days"))
     }
 
     @Test func reasonLineIsCompactAndNumberFreeForRecency() {
@@ -104,6 +150,13 @@ struct NeutralPhrasesTests {
         #expect(withNote.contains("coffee"))
         let noNote = NeutralPhrases.lastContact(channel: .call, note: nil, date: date(2026, 6, 15), now: now)
         #expect(noNote.localizedCaseInsensitiveContains("call"))
+    }
+
+    @Test func journalAppearancesInflectSingularAndPlural() {
+        // Guards the AttributedString localization path — String(localized:)
+        // would leak the ^[…](inflect: true) markup verbatim into the UI.
+        #expect(NeutralPhrases.journalAppearances(count: 1) == "They appear in 1 journal entry.")
+        #expect(NeutralPhrases.journalAppearances(count: 2) == "They appear in 2 journal entries.")
     }
 
     @Test func phrasesNeverCountDaysBackwards() {

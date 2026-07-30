@@ -25,6 +25,7 @@ struct ComposeView: View {
     @State private var showMessageSheet = false
     @State private var askIfSent = false
     @State private var awaitingSMSReturn = false
+    @State private var sentCount = 0
 
     private var lastInteractions: [Interaction] {
         person.interactions.sorted { $0.date > $1.date }.prefix(2).map { $0 }
@@ -44,6 +45,8 @@ struct ComposeView: View {
             .padding()
         }
         .scrollDismissesKeyboard(.interactively)
+        .emberCanvas()
+        .sensoryFeedback(.success, trigger: sentCount)
         .toolbar {
             if draftFocused {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -86,13 +89,12 @@ struct ComposeView: View {
             // Demo people are unlinked; a stand-in number keeps the real send button in shot.
             if DemoSeed.isActive { phoneNumber = "+15550100" }
             #endif
+            var resolved: ResolvedContact?
             if let contactID = person.contactID {
-                let resolved = await services.contacts.resolve(contactID)
+                resolved = await services.contacts.resolve(contactID)
                 phoneNumber = resolved?.phoneNumbers.first?.number
-                if let birthday = resolved?.birthday ?? person.manualBirthday {
-                    daysUntilBirthday = BirthdayMath.daysUntilNextBirthday(birthday, from: .now)
-                }
-            } else if let birthday = person.manualBirthday {
+            }
+            if let birthday = BirthdayResolution.effectiveBirthday(contact: resolved?.birthday, manual: person.manualBirthday) {
                 daysUntilBirthday = BirthdayMath.daysUntilNextBirthday(birthday, from: .now)
             }
             if draft.isEmpty {
@@ -144,8 +146,7 @@ struct ComposeView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+        .emberCard()
     }
 
     private var draftSection: some View {
@@ -168,7 +169,7 @@ struct ComposeView: View {
                 .frame(minHeight: 90)
                 .padding(10)
                 .scrollContentBackground(.hidden)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+                .emberCardSurface()
                 .overlay(alignment: .topLeading) {
                     if draft.isEmpty && !isGenerating {
                         Text(String(localized: "Write something small — it counts."))
@@ -244,6 +245,7 @@ struct ComposeView: View {
     }
 
     private func logSentInteraction() {
+        sentCount += 1
         modelContext.insert(Interaction(person: person, date: .now, channel: .message))
         try? modelContext.save()
         Task {

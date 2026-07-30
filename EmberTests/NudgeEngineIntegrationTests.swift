@@ -16,8 +16,8 @@ struct NudgeEngineIntegrationTests {
         return try ModelContainer(for: schema, configurations: configuration)
     }
 
-    private func makeEngine(_ container: ModelContainer) -> NudgeEngine {
-        NudgeEngine(container: container, contacts: ContactService())
+    private func makeEngine(_ container: ModelContainer, contacts: StubContacts = StubContacts()) -> NudgeEngine {
+        NudgeEngine(container: container, contacts: contacts, scheduler: SchedulerSpy())
     }
 
     private func overduePerson(_ name: String, in context: ModelContext) -> Person {
@@ -79,6 +79,26 @@ struct NudgeEngineIntegrationTests {
         #expect(logs.first?.reason.localizedCaseInsensitiveContains("birthday") == true)
     }
 
+    @Test func engineUsesContactBirthdayWhenLinked() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let person = Person(contactID: "c1", displayNameCache: "Laura", tier: .close)
+        context.insert(person)
+        context.insert(Interaction(person: person, date: .now.addingTimeInterval(-8 * 86_400), channel: .message))
+        try context.save()
+
+        let inThreeDays = Calendar.current.date(byAdding: .day, value: 3, to: .now)!
+        let contacts = StubContacts(contactsByID: [
+            "c1": .fixture(id: "c1", name: "Laura", birthday: Calendar.current.dateComponents([.month, .day], from: inThreeDays))
+        ])
+        let engine = makeEngine(container, contacts: contacts)
+        await engine.evaluate()
+
+        let logs = try context.fetch(FetchDescriptor<NudgeLog>())
+        #expect(logs.count == 1)
+        #expect(logs.first?.reason.localizedCaseInsensitiveContains("birthday") == true)
+    }
+
     @Test func engineCapsAtThreeEvenWithFiveOverdue() async throws {
         let container = try makeContainer()
         let context = container.mainContext
@@ -113,7 +133,27 @@ struct NudgeEngineIntegrationTests {
         #expect(try context.fetch(FetchDescriptor<NudgeLog>()).isEmpty)
     }
 
-    @Test func birthdayEngineUpcomingRespectsTiersAndPartner() async throws {
+    @Test func customDateFeedsTheBonus() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let person = Person(displayNameCache: "Laura", tier: .close)
+        // 8 days since contact — only the +2.0 custom-date bonus clears the threshold.
+        context.insert(person)
+        context.insert(Interaction(person: person, date: .now.addingTimeInterval(-8 * 86_400), channel: .message))
+        let inThreeDays = Calendar.current.date(byAdding: .day, value: 3, to: .now)!
+        let components = Calendar.current.dateComponents([.month, .day], from: inThreeDays)
+        context.insert(CustomDate(person: person, label: "Anniversary", month: components.month!, day: components.day!))
+        try context.save()
+
+        let engine = makeEngine(container)
+        await engine.evaluate()
+
+        let logs = try context.fetch(FetchDescriptor<NudgeLog>())
+        #expect(logs.count == 1)
+        #expect(logs.first?.reason.localizedCaseInsensitiveContains("anniversary") == true)
+    }
+
+    @Test func dateEngineUpcomingRespectsTiersAndPartner() async throws {
         let container = try makeContainer()
         let context = container.mainContext
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: .now)!
@@ -127,8 +167,8 @@ struct NudgeEngineIntegrationTests {
         context.insert(pausedPartner)
         try context.save()
 
-        let birthdayEngine = BirthdayEngine(container: container, contacts: ContactService())
-        let upcoming = await birthdayEngine.upcoming(withinDays: 7)
+        let dateEngine = DateEngine(container: container, contacts: StubContacts(), scheduler: SchedulerSpy())
+        let upcoming = await dateEngine.upcoming(withinDays: 7)
 
         let names = Set(upcoming.map(\.displayName))
         #expect(names.contains("Close"))

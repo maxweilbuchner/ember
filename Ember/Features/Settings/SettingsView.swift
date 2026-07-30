@@ -9,12 +9,14 @@ struct SettingsView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.dismiss) private var dismiss
     @State private var showContactPicker = false
+    @State private var showMeCardPicker = false
+    @State private var meCardName: String?
     @State private var contactStatus = ContactService.authorizationStatus
 
     var body: some View {
         NavigationStack {
             List {
-                Section(String(localized: "Contacts")) {
+                Section {
                     LabeledContent(String(localized: "Access"), value: contactStatusText)
                     if contactStatus == .notDetermined {
                         Button(String(localized: "Connect Contacts")) {
@@ -31,6 +33,16 @@ struct SettingsView: View {
                     Button(String(localized: "Refresh names now")) {
                         Task { await services.personSync.refreshAll() }
                     }
+                    Button {
+                        showMeCardPicker = true
+                    } label: {
+                        LabeledContent(String(localized: "Your card"), value: meCardName ?? String(localized: "Not set"))
+                    }
+                    .foregroundStyle(.primary)
+                } header: {
+                    Text(String(localized: "Contacts"))
+                } footer: {
+                    Text(String(localized: "Ember reads the relationship labels on your card — mother, spouse — to label people. Nothing is copied or stored."))
                 }
 
                 Section(String(localized: "Notifications")) {
@@ -62,6 +74,7 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .emberCanvas()
             .navigationTitle(String(localized: "Settings"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -72,9 +85,17 @@ struct SettingsView: View {
             .contactAccessPicker(isPresented: $showContactPicker) { _ in
                 Task { await services.personSync.refreshAll() }
             }
+            .sheet(isPresented: $showMeCardPicker, onDismiss: {
+                Task { meCardName = await services.contacts.meContact()?.displayName }
+            }) {
+                MeCardPickerSheet()
+            }
             .onAppear {
                 contactStatus = ContactService.authorizationStatus
                 services.modelAvailability = .current
+            }
+            .task {
+                meCardName = await services.contacts.meContact()?.displayName
             }
         }
     }

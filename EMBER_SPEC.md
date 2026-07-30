@@ -135,7 +135,7 @@ Actors, dependency-injected via SwiftUI environment. **NO singletons** (v1's `st
 - Modern async/await only — no completion handlers, no `DispatchQueue.global` wrapping (v1 mixed three concurrency paradigms here).
 
 ### 4.2 `ExtractionService` (actor)
-Wraps Foundation Models. Runs on entry save, always producing **suggestions, never silent writes**.
+Wraps Foundation Models. Runs on entry save. **Amended in M6.7:** an unambiguous match to a person Ember *already knows* is applied automatically and **reversibly, with visible undo** (the tag chip's ×, which also removes the interaction that entry logged). Everything else — anything that would create a Person (contact matches, new names) and anything ambiguous — remains a **suggestion, never a silent write**.
 - Input: entry text + candidate name list from ContactService.
 - Output (use `@Generable` guided generation): mentioned people (with confidence), implied interactions (person + channel guess), commitments, notable life events (free text, attached to the Interaction note).
 - Session per extraction; keep prompts short; handle `unavailable` states (device not eligible, model downloading) by falling back to manual mention selection — the sheet UX from v1's `ContactSelectorView` is proven, port its behaviour.
@@ -171,7 +171,7 @@ Full JSON export (all entities) + images as a zip to Files; and a destructive "D
 
 ### 5.1 Navigation
 Three tabs. NO splash screen (v1 had a hardcoded 2s delay — banned).
-1. **Today** (default): capture field focused at top ("What happened?"), below it: pending extraction confirmations, today's nudges, upcoming birthdays. This tab is the app.
+1. **Today** (default): capture field focused at top ("What happened?"), below it: today's nudges, **today's entries with their tags** (collapsible, remembered), upcoming birthdays/dates. This tab is the app.
 2. **People**: list grouped by tier; Person detail = timeline of interactions & mentions, commitments, ideas, cadence control. Time since last contact shown neutrally ("Last: coffee, mid-June") — never as a warning.
 3. **Journal**: reverse-chron entries, search, calendar jump.
 Settings behind a gear on People: contact sync, notification prefs, security, export/delete, about.
@@ -215,6 +215,16 @@ Port the spirit of v1's `QuietSurfer`: calm, encouraging, instructive. Never "0 
 5. **M5 — Trust & polish:** FaceID lock, export/delete, empty states, app icon, TestFlight.
 
 Test priorities: NudgeEngine scoring (pure, exhaustive), extraction post-processing name resolution, contact-deletion/merge edge cases, notification action handlers.
+
+### M6 — post-v1 additions (2026-07, GitHub issues #1–#4)
+
+1. **Canonical birthday precedence (issue #2):** a linked contact's birthday wins; `manualBirthday` only fills in when the contact has none (`BirthdayResolution.effectiveBirthday`, used by every reader). This *changed* the engines, which were manual-first — a deliberate behaviour change, per §3.1's intent. A day-of occasion notification whose 9:00 moment has already passed is delivered immediately, once (`DateAlertRecord` dedup in SwiftData). Occasion copy moved into `NudgeCopy` under the §4.4 tone guards.
+2. **Birthday on the profile (issue #1):** Person detail shows the effective birthday in a "Dates" section; the manual month/day/optional-year editor appears exactly when the manual fields would be the effective source. Contact-provided birthdays are read-only ("From Contacts").
+3. **Relations (issue #4):** resolved live from `CNContactRelationsKey` — never stored. Relation-to-you comes from the user's own card (chosen manually in Settings → "Your card"; iOS has no me-card API), shown as a chip; the person's own related names list on their profile, cross-linked by unique NameMatcher match. Manual `RelationKind` fallback (`Person.manualRelationRaw`) when no card label exists. Relations are display labels ONLY: no scoring, no copy register, and they NEVER read or write `isPartnerMode` (§6.4 stands). This is not §1.4's out-of-scope "tags/groups" — no filtering, grouping, or graphs.
+4. **Custom dates (issue #3):** `CustomDate` (month/day/optional-year + free-text label, cascade child of Person) at full birthday parity — day-of + 3-day heads-up notifications via the generalised `DateEngine` (was `BirthdayEngine`), Today-tab "Coming up" list, and a +2.0 nudge-score bonus with `NudgeReason.customDateSoon`. Bonuses stack with birthdays (bounded by the ≤3 cap). Copy stays forward-looking. Custom-date labels are NEVER fed to AI drafts — user labels may contain digits DraftSanitizer would reject. Both the nudge bonus and the occasion notification can fire for the same date, mirroring the §4.4 birthday stance.
+5. **Export v2:** adds `people[].relation` and `customDates`.
+6. **Person removal: anonymize or merge (2026-07):** removing a Person who appears in journal entries now branches — **anonymize** (mentions swap to a single hidden placeholder Person "Someone" (`isPlaceholder`, `.paused`, filtered from the people list, extraction, and pickers); children cascade away; journal prose is NEVER rewritten; irreversible) or **merge** into a chosen survivor (`PersonMerge.merge`: children, mentions (deduped), and NudgeLog history move so cooldowns carry; survivor keeps its own name/tier/settings and adopts contact link/birthday/relation only where missing; partner flag transfers). Linking a contact already held by another Person now offers the merge instead of silently creating a double (the previous behaviour — `contactID` has no unique constraint). Any removal closes pending nudges and pulls their notifications (`NudgeEngine.personRemoved`) and resweeps occasion requests. Cleanup tooling for real duplicates, not the §1.4 out-of-scope "tags/groups" organisation features.
+7. **Today: staged capture flow (2026-07, issue #7):** the post-save screen no longer asks for anything. An entry appears under **Today's entries** (collapsible via a Hide/Show toggle whose state persists) showing "Looking for people…" while extraction runs — so "thinking", "found nobody", and "Apple Intelligence off" are finally distinguishable. When extraction lands, known people are auto-tagged per the amended §4.2 (with the interaction logged when the model saw real contact); leftovers are one-tap chips where **one tap is one write** — no Apply, no Skip, no "Log as interaction" toggle. `MentionReviewSheet` remains the manual fallback via the entry's ⋯ menu. `ExtractionState.pending` now means "extraction hasn't successfully completed", making it retryable: `AppServices.retryPendingExtractions()` re-runs entries from the last 24h on foreground, fixing the old bug where suggestions were lost forever on relaunch. The Today section no longer requires having any people.
 
 ---
 

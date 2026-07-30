@@ -15,11 +15,18 @@ nonisolated final class Person {
     var displayNameCache: String = ""
     var tier: CadenceTier = CadenceTier.regular
     var isPartnerMode: Bool = false
+    // The shared "Someone" tombstone that anonymized mentions point at. Hidden
+    // from the people list, extraction, and pickers; kept `.paused` so no
+    // engine ever surfaces it. See PersonMerge.
+    var isPlaceholder: Bool = false
     // SwiftData cannot persist DateComponents (its embedded Calendar asserts at
     // schema build), so the manual birthday is stored as plain fields.
     var manualBirthdayMonth: Int?
     var manualBirthdayDay: Int?
     var manualBirthdayYear: Int?
+    // Manual relation fallback — contact-derived relations are resolved live and
+    // win. A display label only: never reads or writes `isPartnerMode` (§6.4).
+    var manualRelationRaw: String?
     var createdAt: Date = Date.now
 
     /// Only used when the person is not linked to a contact.
@@ -35,6 +42,11 @@ nonisolated final class Person {
         }
     }
 
+    var manualRelation: RelationKind? {
+        get { manualRelationRaw.flatMap(RelationKind.init(rawValue:)) }
+        set { manualRelationRaw = newValue?.rawValue }
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \Interaction.person)
     var interactions: [Interaction] = []
 
@@ -43,6 +55,9 @@ nonisolated final class Person {
 
     @Relationship(deleteRule: .cascade, inverse: \Idea.person)
     var ideas: [Idea] = []
+
+    @Relationship(deleteRule: .cascade, inverse: \CustomDate.person)
+    var customDates: [CustomDate] = []
 
     @Relationship(inverse: \Entry.mentions)
     var mentions: [Entry] = []
@@ -63,6 +78,37 @@ nonisolated final class Person {
         self.manualBirthdayDay = manualBirthday?.day
         self.manualBirthdayYear = manualBirthday?.year
         self.createdAt = .now
+    }
+}
+
+/// Manual relation-to-you labels — the fallback when no contact card supplies
+/// one. Purely descriptive: `.partner`/`.spouse` here does NOT toggle Partner
+/// mode, which stays its own explicit switch (spec §6.4).
+nonisolated enum RelationKind: String, Codable, CaseIterable, Sendable {
+    case mother, father, parent
+    case sister, brother, sibling
+    case daughter, son, child
+    case grandparent
+    case spouse, partner
+    case friend, colleague
+
+    var title: String {
+        switch self {
+        case .mother: String(localized: "Mother")
+        case .father: String(localized: "Father")
+        case .parent: String(localized: "Parent")
+        case .sister: String(localized: "Sister")
+        case .brother: String(localized: "Brother")
+        case .sibling: String(localized: "Sibling")
+        case .daughter: String(localized: "Daughter")
+        case .son: String(localized: "Son")
+        case .child: String(localized: "Child")
+        case .grandparent: String(localized: "Grandparent")
+        case .spouse: String(localized: "Spouse")
+        case .partner: String(localized: "Partner")
+        case .friend: String(localized: "Friend")
+        case .colleague: String(localized: "Colleague")
+        }
     }
 }
 

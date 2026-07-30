@@ -8,13 +8,15 @@ import SwiftUI
 struct TodayView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Query(sort: \Entry.date, order: .reverse) private var entries: [Entry]
     @Query(sort: \NudgeLog.date, order: .reverse) private var nudgeLogs: [NudgeLog]
     @Query private var people: [Person]
-    @State private var birthdays: [BirthdayItem] = []
+    @State private var occasions: [UpcomingOccasion] = []
+    @AppStorage("showTodaysEntries") private var showTodaysEntries = true
 
-    private var pendingEntries: [Entry] {
-        entries.filter { $0.extractionState == .pending }
+    private var todaysEntries: [Entry] {
+        entries.filter { Calendar.current.isDateInToday($0.date) }
     }
 
     private var activeNudges: [(log: NudgeLog, person: Person)] {
@@ -34,27 +36,46 @@ struct TodayView: View {
                         sectionHeader(String(localized: "Worth a message"))
                         ForEach(activeNudges, id: \.log.id) { pair in
                             NudgeCardView(log: pair.log, person: pair.person)
+                                .transition(EmberTheme.calmTransition(reduceMotion: reduceMotion))
                         }
                     }
 
-                    if !pendingEntries.isEmpty && !people.isEmpty {
-                        sectionHeader(String(localized: "Anyone mentioned?"))
-                        ForEach(pendingEntries.prefix(3)) { entry in
-                            PendingEntryCard(entry: entry)
+                    if !todaysEntries.isEmpty {
+                        HStack {
+                            sectionHeader(String(localized: "Today's entries"))
+                            Spacer()
+                            Button(showTodaysEntries
+                                ? String(localized: "Hide")
+                                : String(localized: "Show")) {
+                                showTodaysEntries.toggle()
+                            }
+                            .font(.subheadline)
+                        }
+                        if showTodaysEntries {
+                            ForEach(todaysEntries) { entry in
+                                TodayEntryCard(entry: entry)
+                                    .transition(EmberTheme.calmTransition(reduceMotion: reduceMotion))
+                            }
                         }
                     }
 
-                    if !birthdays.isEmpty {
-                        sectionHeader(String(localized: "Birthdays coming up"))
-                        BirthdayList(items: birthdays)
+                    if !occasions.isEmpty {
+                        sectionHeader(String(localized: "Coming up"))
+                        OccasionList(items: occasions)
                     }
                 }
                 .padding()
+                // Card removals originate in async engine calls, so animation is
+                // keyed on the derived ID lists rather than withAnimation scopes.
+                .animation(EmberTheme.calm, value: activeNudges.map(\.log.id))
+                .animation(EmberTheme.calm, value: todaysEntries.map(\.id))
+                .animation(EmberTheme.calm, value: showTodaysEntries)
             }
             .scrollDismissesKeyboard(.interactively)
+            .emberCanvas()
             .navigationTitle(String(localized: "Today"))
             .task {
-                birthdays = await services.birthdayEngine.upcoming(withinDays: 7)
+                occasions = await services.dateEngine.upcoming(withinDays: 7)
             }
         }
     }
@@ -66,33 +87,45 @@ struct TodayView: View {
     }
 }
 
-private struct BirthdayList: View {
-    let items: [BirthdayItem]
+private struct OccasionList: View {
+    let items: [UpcomingOccasion]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(items) { item in
                 HStack(spacing: 10) {
-                    Image(systemName: "gift")
+                    Image(systemName: symbolName(for: item.kind))
                         .foregroundStyle(Color.accentColor)
-                    Text(item.displayName)
+                    Text(title(for: item))
                         .fontWeight(.medium)
                     Spacer()
-                    Text(birthdayPhrase(item.daysAway))
+                    Text(phrase(for: item))
                         .foregroundStyle(.secondary)
                 }
                 .padding(.vertical, 4)
             }
         }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+        .emberCard()
     }
 
-    private func birthdayPhrase(_ daysAway: Int) -> String {
-        switch daysAway {
-        case 0: String(localized: "today 🎂")
-        case 1: String(localized: "tomorrow")
-        default: String(localized: "in \(daysAway) days")
+    private func symbolName(for kind: UpcomingOccasion.Kind) -> String {
+        switch kind {
+        case .birthday: "gift"
+        case .custom: "calendar.badge.clock"
         }
+    }
+
+    private func title(for item: UpcomingOccasion) -> String {
+        switch item.kind {
+        case .birthday: item.displayName
+        case .custom(let label): String(localized: "\(item.displayName) — \(label)")
+        }
+    }
+
+    private func phrase(for item: UpcomingOccasion) -> String {
+        if item.daysAway == 0, case .birthday = item.kind {
+            return String(localized: "today 🎂")
+        }
+        return NeutralPhrases.upcoming(daysAway: item.daysAway)
     }
 }

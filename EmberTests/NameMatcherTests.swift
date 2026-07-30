@@ -21,6 +21,23 @@ struct NameMatcherTests {
         )
     }
 
+    // MARK: compactName
+
+    @Test func compactNameUsesFirstNameAndLastInitial() {
+        #expect(NameMatcher.compactName("Julia Katharina Schwarenthorer") == "Julia S.")
+        #expect(NameMatcher.compactName("Anna Schmid") == "Anna S.")
+    }
+
+    @Test func compactNameLeavesSingleWordsAlone() {
+        #expect(NameMatcher.compactName("Someone") == "Someone")
+        #expect(NameMatcher.compactName("Anna") == "Anna")
+        #expect(NameMatcher.compactName("") == "")
+    }
+
+    @Test func compactNameKeepsDiacritics() {
+        #expect(NameMatcher.compactName("Tomáš Novák") == "Tomáš N.")
+    }
+
     // MARK: matches
 
     @Test func matchesGivenNamePrefix() {

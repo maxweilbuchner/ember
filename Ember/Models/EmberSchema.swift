@@ -14,7 +14,10 @@ nonisolated enum SchemaV1: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(1, 0, 0) }
 
     static var models: [any PersistentModel.Type] {
-        [Person.self, Entry.self, Interaction.self, Commitment.self, Idea.self, NudgeLog.self, NudgeRun.self]
+        [
+            Person.self, Entry.self, Interaction.self, Commitment.self, Idea.self,
+            CustomDate.self, NudgeLog.self, NudgeRun.self, DateAlertRecord.self,
+        ]
     }
 }
 

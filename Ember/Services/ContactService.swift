@@ -12,6 +12,7 @@ nonisolated struct ResolvedContact: Sendable, Hashable {
     var thumbnailData: Data?
     var birthday: DateComponents?
     var phoneNumbers: [LabeledNumber]
+    var relations: [ContactRelationItem] = []
 
     var nameCandidate: NameCandidate {
         NameCandidate(id: id, givenName: givenName, familyName: familyName, nickname: nickname, displayName: displayName)
@@ -22,6 +23,14 @@ nonisolated struct LabeledNumber: Sendable, Hashable {
     var label: String
     var number: String
 }
+
+/// The one contact capability the engines need — a seam so tests never touch
+/// the live CNContactStore.
+protocol ContactResolving: Sendable {
+    func resolve(_ contactID: String) async -> ResolvedContact?
+}
+
+extension ContactService: ContactResolving {}
 
 /// Live resolution of `contactID → (name, photo, birthday, phone numbers)` with an
 /// in-memory cache, invalidated on CNContactStoreDidChange. Ember never duplicates
@@ -41,6 +50,7 @@ actor ContactService {
             CNContactThumbnailImageDataKey as CNKeyDescriptor,
             CNContactBirthdayKey as CNKeyDescriptor,
             CNContactPhoneNumbersKey as CNKeyDescriptor,
+            CNContactRelationsKey as CNKeyDescriptor,
             CNContactFormatter.descriptorForRequiredKeys(for: .fullName),
         ]
     }
@@ -101,6 +111,12 @@ actor ContactService {
         allContacts().map(\.nameCandidate)
     }
 
+    /// The user's own card, chosen manually in Settings (iOS exposes no me-card
+    /// API). nil = not set, or the chosen contact is gone — both normal states.
+    func meContact() -> ResolvedContact? {
+        MeCard.contactID.flatMap { resolve($0) }
+    }
+
     // MARK: Change observation
 
     func startObserving() {
@@ -155,7 +171,25 @@ actor ContactService {
                     label: $0.label.map { CNLabeledValue<CNPhoneNumber>.localizedString(forLabel: $0) } ?? "",
                     number: $0.value.stringValue
                 )
+            },
+            relations: contact.contactRelations.map {
+                ContactRelationItem(
+                    rawLabel: $0.label ?? "",
+                    localizedLabel: $0.label.map { CNLabeledValue<CNContactRelation>.localizedString(forLabel: $0) } ?? "",
+                    name: $0.value.name
+                )
             }
         )
+    }
+}
+
+/// Which contact card is *you* — a UI preference (like the lock toggle), read
+/// only by views to derive relation labels; engines never touch it.
+nonisolated enum MeCard {
+    private static let key = "meContactID"
+
+    static var contactID: String? {
+        get { UserDefaults.standard.string(forKey: key) }
+        set { UserDefaults.standard.set(newValue, forKey: key) }
     }
 }

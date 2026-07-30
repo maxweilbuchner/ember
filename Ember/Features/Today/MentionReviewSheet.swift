@@ -1,50 +1,7 @@
-// PendingEntryCard.swift
+// MentionReviewSheet.swift
 
 import SwiftData
 import SwiftUI
-
-/// A saved entry awaiting review: who was mentioned, and did you actually
-/// see or talk to them? Fully skippable — the entry is already saved.
-/// (M4 replaces the manual picker with AI-suggested chips; this manual sheet
-/// stays as the fallback for model-unavailable states.)
-struct PendingEntryCard: View {
-    let entry: Entry
-    @Environment(AppServices.self) private var services
-    @Environment(\.modelContext) private var modelContext
-    @State private var showReview = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(entry.previewLine)
-                .lineLimit(2)
-            if let suggestions = services.entrySuggestions[entry.id] {
-                ExtractionChipsView(entry: entry, suggestions: suggestions)
-            }
-            HStack {
-                Text(entry.date, style: .time)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button(String(localized: "Skip")) {
-                    entry.extractionState = .skipped
-                    try? modelContext.save()
-                    services.entrySuggestions[entry.id] = nil
-                }
-                .buttonStyle(.bordered)
-                Button(String(localized: "Review")) {
-                    showReview = true
-                }
-                .buttonStyle(.borderedProminent)
-            }
-            .controlSize(.small)
-        }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
-        .sheet(isPresented: $showReview) {
-            MentionReviewSheet(entry: entry)
-        }
-    }
-}
 
 /// Manual mention selection — the behaviour port of v1's ContactSelectorView:
 /// pick who's mentioned, optionally log it as a real interaction in the same step.
@@ -54,11 +11,14 @@ struct MentionReviewSheet: View {
     @Environment(\.dismiss) private var dismiss
     @Query(sort: \Person.displayNameCache) private var people: [Person]
     @State private var selectedIDs: Set<UUID> = []
+    @State private var originalIDs: Set<UUID> = []
+    @State private var showReplaceOffer = false
     @State private var alsoLogInteraction = false
     @State private var channel: Channel = .inPerson
     @State private var searchText = ""
 
     private var filteredPeople: [Person] {
+        let people = people.filter { !$0.isPlaceholder }
         let trimmed = searchText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return people }
         return people.filter {
@@ -78,14 +38,46 @@ struct MentionReviewSheet: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(4)
                 }
+                // Anonymized tombstone mentions can be kept or removed here —
+                // they never appear in the normal pick list below.
+                if entry.mentions.contains(where: \.isPlaceholder) {
+                    Section {
+                        ForEach(entry.mentions.filter(\.isPlaceholder)) { placeholder in
+                            Button {
+                                toggle(placeholder.id)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(placeholder.displayNameCache)
+                                            .foregroundStyle(.primary)
+                                        Text(String(localized: "Anonymized mention — can only be removed"))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    if selectedIDs.contains(placeholder.id) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundStyle(Color.accentColor)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
                 Section(String(localized: "Mentioned")) {
                     ForEach(filteredPeople) { person in
                         Button {
                             toggle(person.id)
                         } label: {
                             HStack {
-                                Text(person.displayNameCache)
-                                    .foregroundStyle(.primary)
+                                HStack(spacing: 4) {
+                                    Text(person.displayNameCache)
+                                    if person.isPartnerMode {
+                                        Image(systemName: "heart.fill")
+                                            .font(.caption)
+                                    }
+                                }
+                                .foregroundStyle(.primary)
                                 Spacer()
                                 if selectedIDs.contains(person.id) {
                                     Image(systemName: "checkmark.circle.fill")
@@ -111,6 +103,7 @@ struct MentionReviewSheet: View {
                 }
             }
             .searchable(text: $searchText, prompt: String(localized: "Find a person"))
+            .emberCanvas()
             .navigationTitle(String(localized: "Who was mentioned?"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -123,8 +116,29 @@ struct MentionReviewSheet: View {
             }
             .onAppear {
                 selectedIDs = Set(entry.mentions.map(\.id))
+                originalIDs = selectedIDs
+            }
+            .alert(String(localized: "Also remove Someone?"), isPresented: $showReplaceOffer) {
+                Button(String(localized: "Remove"), role: .destructive) {
+                    commit(removingPlaceholders: true)
+                }
+                Button(String(localized: "Keep Someone"), role: .cancel) {
+                    commit(removingPlaceholders: false)
+                }
+            } message: {
+                Text(replaceOfferMessage)
             }
         }
+    }
+
+    private var replaceOfferMessage: String {
+        let addedNames = people
+            .filter { selectedIDs.subtracting(originalIDs).contains($0.id) }
+            .map(\.displayNameCache)
+        let names = addedNames.isEmpty
+            ? String(localized: "someone new")
+            : addedNames.joined(separator: ", ")
+        return String(localized: "You added \(names). If that anonymized mention was them, it's no longer needed. Your journal text isn't changed.")
     }
 
     private func toggle(_ id: UUID) {
@@ -136,10 +150,27 @@ struct MentionReviewSheet: View {
     }
 
     private func saveReview() {
+        // Someone new was ticked while an anonymized mention is still selected:
+        // offer to drop the tombstone once, then commit either way.
+        let newlyAdded = selectedIDs.subtracting(originalIDs)
+        let placeholderStillSelected = entry.mentions.contains { $0.isPlaceholder && selectedIDs.contains($0.id) }
+        if !newlyAdded.isEmpty && placeholderStillSelected {
+            showReplaceOffer = true
+            return
+        }
+        commit(removingPlaceholders: false)
+    }
+
+    private func commit(removingPlaceholders: Bool) {
+        if removingPlaceholders {
+            for placeholder in entry.mentions where placeholder.isPlaceholder {
+                selectedIDs.remove(placeholder.id)
+            }
+        }
         let selected = people.filter { selectedIDs.contains($0.id) }
         entry.mentions = selected
         if alsoLogInteraction {
-            for person in selected {
+            for person in selected where !person.isPlaceholder {
                 modelContext.insert(Interaction(
                     person: person,
                     date: entry.date,
@@ -149,6 +180,7 @@ struct MentionReviewSheet: View {
             }
         }
         entry.extractionState = .reviewed
+        PersonMerge.deleteOrphanedPlaceholders(context: modelContext)
         try? modelContext.save()
         dismiss()
     }

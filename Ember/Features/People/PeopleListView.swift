@@ -9,15 +9,19 @@ struct PeopleListView: View {
     @State private var showSettings = false
     @State private var showAddPeople = false
 
+    private var visiblePeople: [Person] {
+        people.filter { !$0.isPlaceholder }
+    }
+
     private func people(in tier: CadenceTier) -> [Person] {
-        people.filter { $0.tier == tier }
+        visiblePeople.filter { $0.tier == tier }
     }
 
     var body: some View {
         @Bindable var router = services.router
         NavigationStack {
             Group {
-                if people.isEmpty {
+                if visiblePeople.isEmpty {
                     EmptyStateView(
                         systemImage: "person.2",
                         title: String(localized: "Your people live here"),
@@ -42,6 +46,7 @@ struct PeopleListView: View {
                     }
                 }
             }
+            .emberCanvas()
             #if DEBUG
             // Programmatic navigation for the DEBUG deep links (screenshot script).
             .navigationDestination(item: $router.detailPersonID.asIdentifiable) { target in
@@ -72,6 +77,7 @@ struct PeopleListView: View {
                     } label: {
                         Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel(String(localized: "Settings"))
                 }
                 ToolbarItem {
                     Button {
@@ -79,6 +85,7 @@ struct PeopleListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityLabel(String(localized: "Add people"))
                 }
             }
             .sheet(isPresented: $showSettings) {

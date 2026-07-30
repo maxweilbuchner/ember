@@ -10,13 +10,15 @@ import UserNotifications
 // MARK: Export document (versioned, decoupled from the SwiftData schema)
 
 nonisolated struct EmberExport: Codable, Sendable {
-    var version: Int = 1
+    /// 2: adds `people[].relation` and `customDates`.
+    var version: Int = 2
     var exportedAt: Date
     var people: [PersonExport] = []
     var entries: [EntryExport] = []
     var interactions: [InteractionExport] = []
     var commitments: [CommitmentExport] = []
     var ideas: [IdeaExport] = []
+    var customDates: [CustomDateExport] = []
     var nudgeLogs: [NudgeLogExport] = []
 }
 
@@ -29,6 +31,7 @@ nonisolated struct PersonExport: Codable, Sendable {
     var birthdayMonth: Int?
     var birthdayDay: Int?
     var birthdayYear: Int?
+    var relation: String?
     var createdAt: Date
 }
 
@@ -69,6 +72,16 @@ nonisolated struct IdeaExport: Codable, Sendable {
     var createdAt: Date
 }
 
+nonisolated struct CustomDateExport: Codable, Sendable {
+    var id: UUID
+    var personID: UUID?
+    var label: String
+    var month: Int
+    var day: Int
+    var year: Int?
+    var createdAt: Date
+}
+
 nonisolated struct NudgeLogExport: Codable, Sendable {
     var id: UUID
     var personID: UUID
@@ -102,6 +115,7 @@ actor ExportService {
                 birthdayMonth: person.manualBirthdayMonth,
                 birthdayDay: person.manualBirthdayDay,
                 birthdayYear: person.manualBirthdayYear,
+                relation: person.manualRelationRaw,
                 createdAt: person.createdAt
             ))
         }
@@ -144,6 +158,17 @@ actor ExportService {
                 text: idea.text,
                 isDone: idea.isDone,
                 createdAt: idea.createdAt
+            ))
+        }
+        for customDate in (try? context.fetch(FetchDescriptor<CustomDate>())) ?? [] {
+            export.customDates.append(CustomDateExport(
+                id: customDate.id,
+                personID: customDate.person?.id,
+                label: customDate.label,
+                month: customDate.month,
+                day: customDate.day,
+                year: customDate.year,
+                createdAt: customDate.createdAt
             ))
         }
         for log in (try? context.fetch(FetchDescriptor<NudgeLog>())) ?? [] {
@@ -226,10 +251,12 @@ actor ExportService {
         wipe(Interaction.self)
         wipe(Commitment.self)
         wipe(Idea.self)
+        wipe(CustomDate.self)
         wipe(Entry.self)
         wipe(Person.self)
         wipe(NudgeLog.self)
         wipe(NudgeRun.self)
+        wipe(DateAlertRecord.self)
         try? context.save()
 
         try? FileManager.default.removeItem(at: ImageStore.directory)

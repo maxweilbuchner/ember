@@ -94,10 +94,12 @@ enum DemoSeed {
             let pending = Entry(date: pendingDate, text: "Lunch with Anna to celebrate the gallery job. Her friend Léo came along — sculptor, very funny. Told Anna I'd send my Lisbon list.")
             pending.id = pendingEntryID
             context.insert(pending)
+            // The shipped state: Anna is already auto-tagged (she's a known
+            // person); only Léo and the commitment still want a tap.
+            pending.mentions = [anna]
             services.entrySuggestions[pendingEntryID] = EntrySuggestions(
                 entryID: pendingEntryID,
                 mentions: [
-                    MentionSuggestion(name: "Anna", outcome: .person(annaID), interacted: true, channelGuess: .inPerson, lifeEvent: nil),
                     MentionSuggestion(name: "Léo", outcome: .unknown, interacted: true, channelGuess: .inPerson, lifeEvent: nil),
                 ],
                 commitments: [

@@ -16,12 +16,18 @@ actor NudgeEngine {
     static let snoozeActionID = "NUDGE_SNOOZE"
 
     private let container: ModelContainer
-    private let contacts: ContactService
+    private let contacts: any ContactResolving
+    private let scheduler: any NotificationScheduling
     private var draftProvider: (any DraftProviding)?
 
-    init(container: ModelContainer, contacts: ContactService) {
+    init(
+        container: ModelContainer,
+        contacts: any ContactResolving,
+        scheduler: any NotificationScheduling = SystemNotificationScheduler()
+    ) {
         self.container = container
         self.contacts = contacts
+        self.scheduler = scheduler
     }
 
     func setDraftProvider(_ provider: any DraftProviding) {
@@ -80,13 +86,20 @@ actor NudgeEngine {
         var inputs: [ScoringInput] = []
         for person in people {
             guard person.tier != .paused, !person.isPartnerMode else { continue }
-            let birthday: DateComponents?
-            if let manual = person.manualBirthday {
-                birthday = manual
-            } else if let contactID = person.contactID {
-                birthday = await contacts.resolve(contactID)?.birthday
-            } else {
-                birthday = nil
+            var contactBirthday: DateComponents?
+            if let contactID = person.contactID {
+                contactBirthday = await contacts.resolve(contactID)?.birthday
+            }
+            let birthday = BirthdayResolution.effectiveBirthday(contact: contactBirthday, manual: person.manualBirthday)
+            var nearestCustomDate: (label: String, daysAway: Int)?
+            for customDate in person.customDates {
+                guard let daysAway = BirthdayMath.daysUntilNextBirthday(
+                    DateComponents(month: customDate.month, day: customDate.day),
+                    from: now
+                ) else { continue }
+                if daysAway < (nearestCustomDate?.daysAway ?? .max) {
+                    nearestCustomDate = (customDate.label, daysAway)
+                }
             }
             let lastInteraction = person.interactions.max { $0.date < $1.date }
             let openCommitments = person.commitments.filter { !$0.isDone }
@@ -98,6 +111,8 @@ actor NudgeEngine {
                 daysSinceLastInteraction: lastInteraction.map { now.timeIntervalSince($0.date) / 86_400 },
                 daysSinceCreated: now.timeIntervalSince(person.createdAt) / 86_400,
                 daysUntilBirthday: birthday.flatMap { BirthdayMath.daysUntilNextBirthday($0, from: now) },
+                daysUntilCustomDate: nearestCustomDate?.daysAway,
+                customDateLabel: nearestCustomDate?.label,
                 openCommitmentCount: openCommitments.count,
                 daysSinceLastNudgeEvent: latestEventByPerson[person.id].map { now.timeIntervalSince($0) / 86_400 },
                 lastInteractionNote: lastInteraction?.note,
@@ -132,13 +147,13 @@ actor NudgeEngine {
         let context = ModelContext(container)
         guard let person = fetchPerson(personID, in: context) else { return }
         context.insert(Interaction(person: person, date: now, channel: .other))
-        closeLog(nudgeLogID, personID: personID, outcome: .actedOn, in: context)
+        await closeLog(nudgeLogID, personID: personID, outcome: .actedOn, in: context)
         try? context.save()
     }
 
     func handleSnooze(personID: UUID, nudgeLogID: UUID?, now: Date = .now) async {
         let context = ModelContext(container)
-        closeLog(nudgeLogID, personID: personID, outcome: .snoozed, in: context)
+        await closeLog(nudgeLogID, personID: personID, outcome: .snoozed, in: context)
         // A fresh log entry gives the full 14-day quiet window from the snooze itself.
         context.insert(NudgeLog(
             personID: personID,
@@ -150,6 +165,22 @@ actor NudgeEngine {
         try? context.save()
     }
 
+    /// A Person was deleted or merged away: close their pending nudges and pull
+    /// the notifications — actions on a dead person's nudge would otherwise
+    /// silently no-op (or, for snooze, insert an orphan log).
+    func personRemoved(_ personID: UUID) async {
+        let context = ModelContext(container)
+        let logs = (try? context.fetch(FetchDescriptor<NudgeLog>())) ?? []
+        for log in logs where log.personID == personID && log.outcome == .pending {
+            log.outcome = .expired
+            if let notificationID = log.notificationID {
+                await scheduler.removeDelivered(identifiers: [notificationID])
+                await scheduler.removePending(identifiers: [notificationID])
+            }
+        }
+        try? context.save()
+    }
+
     // MARK: Private
 
     private func fetchPerson(_ personID: UUID, in context: ModelContext) -> Person? {
@@ -157,7 +188,7 @@ actor NudgeEngine {
         return (try? context.fetch(descriptor))?.first
     }
 
-    private func closeLog(_ nudgeLogID: UUID?, personID: UUID, outcome: NudgeOutcome, in context: ModelContext) {
+    private func closeLog(_ nudgeLogID: UUID?, personID: UUID, outcome: NudgeOutcome, in context: ModelContext) async {
         let logs = (try? context.fetch(FetchDescriptor<NudgeLog>())) ?? []
         let target = logs.first { $0.id == nudgeLogID }
             ?? logs.filter { $0.personID == personID && $0.outcome == .pending }
@@ -165,24 +196,25 @@ actor NudgeEngine {
         guard let target else { return }
         target.outcome = outcome
         if let notificationID = target.notificationID {
-            UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: [notificationID])
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [notificationID])
+            await scheduler.removeDelivered(identifiers: [notificationID])
+            await scheduler.removePending(identifiers: [notificationID])
         }
     }
 
     private func scheduleNotification(for candidate: NudgeCandidate, notificationID: String, logID: UUID) async {
         let draft = await draftProvider?.draft(for: DraftContext(from: candidate.input))
-        let content = UNMutableNotificationContent()
-        content.title = NudgeCopy.notificationTitle(for: candidate)
-        content.body = NudgeCopy.notificationBody(for: candidate, draft: draft)
-        content.sound = .default
-        content.categoryIdentifier = Self.categoryIdentifier
-        content.userInfo = [
-            "personID": candidate.input.personID.uuidString,
-            "nudgeLogID": logID.uuidString,
-        ]
-        let request = UNNotificationRequest(identifier: notificationID, content: content, trigger: nil)
-        try? await UNUserNotificationCenter.current().add(request)
+        let spec = NotificationSpec(
+            identifier: notificationID,
+            title: NudgeCopy.notificationTitle(for: candidate),
+            body: NudgeCopy.notificationBody(for: candidate, draft: draft),
+            categoryIdentifier: Self.categoryIdentifier,
+            userInfo: [
+                "personID": candidate.input.personID.uuidString,
+                "nudgeLogID": logID.uuidString,
+            ],
+            fireDateComponents: nil
+        )
+        try? await scheduler.add(spec)
     }
 
     private func scheduleNextBackgroundRefresh(after date: Date) {

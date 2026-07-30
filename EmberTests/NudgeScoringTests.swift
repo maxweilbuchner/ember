@@ -13,6 +13,8 @@ struct NudgeScoringTests {
         daysSinceLastInteraction: Double? = nil,
         daysSinceCreated: Double = 100,
         daysUntilBirthday: Int? = nil,
+        daysUntilCustomDate: Int? = nil,
+        customDateLabel: String? = nil,
         openCommitmentCount: Int = 0,
         daysSinceLastNudgeEvent: Double? = nil
     ) -> ScoringInput {
@@ -24,6 +26,8 @@ struct NudgeScoringTests {
             daysSinceLastInteraction: daysSinceLastInteraction,
             daysSinceCreated: daysSinceCreated,
             daysUntilBirthday: daysUntilBirthday,
+            daysUntilCustomDate: daysUntilCustomDate,
+            customDateLabel: customDateLabel,
             openCommitmentCount: openCommitmentCount,
             daysSinceLastNudgeEvent: daysSinceLastNudgeEvent
         )
@@ -63,6 +67,42 @@ struct NudgeScoringTests {
     @Test func birthdayOutsideWindowAddsNothing() {
         let score = NudgeScoring.score(input(tier: .close, daysSinceLastInteraction: 14, daysUntilBirthday: 8))
         #expect(score == 1.0)
+    }
+
+    @Test func customDateWithinWindowAddsTwo() {
+        let score = NudgeScoring.score(input(
+            tier: .close, daysSinceLastInteraction: 14,
+            daysUntilCustomDate: 3, customDateLabel: "Anniversary"
+        ))
+        #expect(score == 3.0)
+    }
+
+    @Test func customDateOutsideWindowAddsNothing() {
+        let score = NudgeScoring.score(input(
+            tier: .close, daysSinceLastInteraction: 14,
+            daysUntilCustomDate: 8, customDateLabel: "Anniversary"
+        ))
+        #expect(score == 1.0)
+    }
+
+    @Test func birthdayAndCustomDateBonusesStack() {
+        // Documented decision: both in the window → +4.0; the ≤3 selection cap
+        // still bounds how many nudges ship.
+        let score = NudgeScoring.score(input(
+            tier: .close, daysSinceLastInteraction: 14,
+            daysUntilBirthday: 2, daysUntilCustomDate: 3, customDateLabel: "Anniversary"
+        ))
+        #expect(score == 5.0)
+    }
+
+    @Test func customDateReasonCarriesLabel() {
+        let candidate = NudgeScoring.select([
+            input(
+                tier: .close, daysSinceLastInteraction: 28,
+                daysUntilCustomDate: 2, customDateLabel: "Anniversary"
+            )
+        ]).first
+        #expect(candidate?.reasons.contains(.customDateSoon(label: "Anniversary", daysAway: 2)) == true)
     }
 
     @Test func commitmentsAddHalfEachCappedAtOneAndAHalf() {
@@ -209,5 +249,77 @@ struct BirthdayMathTests {
             calendar: calendar
         )
         #expect(days == 2)
+    }
+
+    @Test func february29StaysFeb29InLeapYears() {
+        let days = BirthdayMath.daysUntilNextBirthday(
+            DateComponents(month: 2, day: 29),
+            from: date(2028, 2, 27),
+            calendar: calendar
+        )
+        #expect(days == 2)
+    }
+
+    @Test func february29OnNormalisedDayIsZero() {
+        // Non-leap year, today is Mar 1 — the normalised occurrence is today.
+        let days = BirthdayMath.daysUntilNextBirthday(
+            DateComponents(month: 2, day: 29),
+            from: date(2027, 3, 1),
+            calendar: calendar
+        )
+        #expect(days == 0)
+    }
+
+    @Test func timezoneShiftedCalendarCountsLocalDays() {
+        // Same instant, two calendars: what is "June 14, 23:30" in Berlin is
+        // already June 15 in Tokyo — daysAway must follow the calendar's locality.
+        let berlin = Calendar.gregorian(timeZone: "Europe/Berlin")
+        let tokyo = Calendar.gregorian(timeZone: "Asia/Tokyo")
+        let instant = berlin.date(from: DateComponents(year: 2026, month: 6, day: 14, hour: 23, minute: 30))!
+        let birthday = DateComponents(month: 6, day: 15)
+        #expect(BirthdayMath.daysUntilNextBirthday(birthday, from: instant, calendar: berlin) == 1)
+        #expect(BirthdayMath.daysUntilNextBirthday(birthday, from: instant, calendar: tokyo) == 0)
+    }
+
+    // MARK: Editor day ranges
+
+    @Test func februaryWithoutYearAllowsDay29() {
+        #expect(BirthdayMath.validDayRange(month: 2, year: nil, calendar: calendar) == 1...29)
+    }
+
+    @Test func februaryNonLeapYearCapsAt28() {
+        #expect(BirthdayMath.validDayRange(month: 2, year: 2025, calendar: calendar) == 1...28)
+        #expect(BirthdayMath.validDayRange(month: 2, year: 2028, calendar: calendar) == 1...29)
+    }
+
+    @Test func monthLengthsAreRespected() {
+        #expect(BirthdayMath.validDayRange(month: 4, year: nil, calendar: calendar) == 1...30)
+        #expect(BirthdayMath.validDayRange(month: 7, year: nil, calendar: calendar) == 1...31)
+    }
+}
+
+extension Calendar {
+    fileprivate static func gregorian(timeZone identifier: String) -> Calendar {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: identifier)!
+        return calendar
+    }
+}
+
+@Suite("Birthday resolution")
+struct BirthdayResolutionTests {
+    @Test func contactBirthdayWinsWhenBothExist() {
+        let contact = DateComponents(month: 6, day: 15)
+        let manual = DateComponents(month: 6, day: 20)
+        #expect(BirthdayResolution.effectiveBirthday(contact: contact, manual: manual) == contact)
+    }
+
+    @Test func manualFillsInWhenContactHasNone() {
+        let manual = DateComponents(month: 6, day: 20)
+        #expect(BirthdayResolution.effectiveBirthday(contact: nil, manual: manual) == manual)
+    }
+
+    @Test func nothingGivesNil() {
+        #expect(BirthdayResolution.effectiveBirthday(contact: nil, manual: nil) == nil)
     }
 }

@@ -25,6 +25,13 @@ nonisolated enum NudgeCopy {
                 case 1: lines.append(String(localized: "Their birthday is tomorrow 🎂"))
                 default: lines.append(String(localized: "Their birthday is in \(daysAway) days."))
                 }
+            case .customDateSoon(let label, let daysAway):
+                let inline = lowercasedFirst(label)
+                switch daysAway {
+                case 0: lines.append(String(localized: "It's their \(inline) today."))
+                case 1: lines.append(String(localized: "Their \(inline) is tomorrow."))
+                default: lines.append(String(localized: "Their \(inline) is in \(daysAway) days."))
+                }
             case .openCommitments(let texts):
                 if let first = texts.first {
                     lines.append(String(localized: "You mentioned you'd \(clip(first, limit: 60))"))
@@ -53,11 +60,50 @@ nonisolated enum NudgeCopy {
                 parts.append(daysAway == 0
                     ? String(localized: "birthday today")
                     : String(localized: "birthday in \(daysAway) days"))
+            case .customDateSoon(let label, let daysAway):
+                let inline = lowercasedFirst(label)
+                parts.append(daysAway == 0
+                    ? String(localized: "\(inline) today")
+                    : String(localized: "\(inline) in \(daysAway) days"))
             case .openCommitments:
                 parts.append(String(localized: "open commitment"))
             }
         }
         return parts.joined(separator: " · ")
+    }
+
+    // MARK: Occasion notifications (DateEngine)
+
+    static func birthdayDayOfTitle(name: String) -> String {
+        String(localized: "\(name)'s birthday is today 🎂")
+    }
+
+    static func birthdayDayOfBody() -> String {
+        String(localized: "A lovely day to reach out.")
+    }
+
+    static func birthdayHeadsUpTitle(name: String) -> String {
+        String(localized: "\(name)'s birthday is in 3 days")
+    }
+
+    static func birthdayHeadsUpBody() -> String {
+        String(localized: "Time enough to plan something small.")
+    }
+
+    static func customDateDayOfTitle(name: String, label: String) -> String {
+        String(localized: "It's \(name)'s \(lowercasedFirst(label)) today")
+    }
+
+    static func customDateHeadsUpTitle(name: String, label: String) -> String {
+        String(localized: "\(name)'s \(lowercasedFirst(label)) is in 3 days")
+    }
+
+    /// User labels arrive title-cased ("Anniversary"); mid-sentence they read
+    /// better lowercased. Leaves anything else (acronyms, names) alone.
+    private static func lowercasedFirst(_ text: String) -> String {
+        guard let first = text.first, first.isUppercase,
+              text.dropFirst().allSatisfy({ !$0.isUppercase }) else { return text }
+        return first.lowercased() + text.dropFirst()
     }
 
     private static func clip(_ text: String, limit: Int = 80) -> String {
@@ -87,6 +133,24 @@ nonisolated enum NeutralPhrases {
         case ...10: return String(localized: "early \(monthPart)")
         case ...20: return String(localized: "mid-\(monthPart)")
         default: return String(localized: "late \(monthPart)")
+        }
+    }
+
+    /// "They appear in 2 journal entries." with automatic grammar agreement.
+    /// The `^[…](inflect: true)` markup is only processed on the AttributedString
+    /// localization path — `String(localized:)` hands it through verbatim — so
+    /// this wrapper localizes as AttributedString and flattens.
+    static func journalAppearances(count: Int) -> String {
+        String(AttributedString(localized: "They appear in ^[\(count) journal entries](inflect: true).").characters)
+    }
+
+    /// Forward-looking occasion phrase for chips and lists: "today" / "tomorrow" /
+    /// "in N days" — the one place a future count is allowed (spec §4.4).
+    static func upcoming(daysAway: Int) -> String {
+        switch daysAway {
+        case 0: String(localized: "today")
+        case 1: String(localized: "tomorrow")
+        default: String(localized: "in \(daysAway) days")
         }
     }
 

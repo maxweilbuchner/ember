@@ -16,6 +16,12 @@ nonisolated struct ScoringInput: Sendable, Hashable {
     var daysSinceCreated: Double
     /// Days until the next birthday occurrence (0 = today); nil = unknown.
     var daysUntilBirthday: Int?
+    /// Days until the nearest custom date (0 = today); nil = none upcoming.
+    /// Custom dates are deliberately NOT part of DraftContext — user labels may
+    /// contain digits ("5 year anniversary") that DraftSanitizer would reject.
+    var daysUntilCustomDate: Int?
+    /// Label of that nearest custom date, for nudge copy.
+    var customDateLabel: String?
     var openCommitmentCount: Int
     /// Days since the last nudge *or* snooze event for this person; nil = never nudged.
     var daysSinceLastNudgeEvent: Double?
@@ -36,6 +42,7 @@ nonisolated struct NudgeCandidate: Sendable, Hashable {
 nonisolated enum NudgeReason: Sendable, Hashable {
     case beenAWhile
     case birthdaySoon(daysAway: Int)
+    case customDateSoon(label: String, daysAway: Int)
     case openCommitments([String])
 }
 

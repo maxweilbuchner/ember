@@ -14,6 +14,9 @@ nonisolated enum NudgeScoring {
     static let recencyCap = 3.0
     static let birthdayWindowDays = 7
     static let birthdayBonus = 2.0
+    /// Full birthday parity for custom dates (issue #3); a birthday and a custom
+    /// date in the same window stack — the ≤3 selection cap still bounds output.
+    static let customDateBonus = 2.0
     static let commitmentBonus = 0.5
     static let commitmentBonusCap = 1.5
     static let nudgeCooldownDays = 14.0
@@ -33,6 +36,9 @@ nonisolated enum NudgeScoring {
         var score = min(recencyDays / cadenceDays, recencyCap)
         if let birthday = input.daysUntilBirthday, (0...birthdayWindowDays).contains(birthday) {
             score += birthdayBonus
+        }
+        if let customDate = input.daysUntilCustomDate, (0...birthdayWindowDays).contains(customDate) {
+            score += customDateBonus
         }
         score += min(Double(input.openCommitmentCount) * commitmentBonus, commitmentBonusCap)
         return score
@@ -57,10 +63,23 @@ nonisolated enum NudgeScoring {
         if let birthday = input.daysUntilBirthday, (0...birthdayWindowDays).contains(birthday) {
             reasons.append(.birthdaySoon(daysAway: birthday))
         }
+        if let customDate = input.daysUntilCustomDate, (0...birthdayWindowDays).contains(customDate),
+           let label = input.customDateLabel {
+            reasons.append(.customDateSoon(label: label, daysAway: customDate))
+        }
         if input.openCommitmentCount > 0 {
             reasons.append(.openCommitments(input.openCommitmentTexts))
         }
         return reasons
+    }
+}
+
+/// Canonical birthday precedence (spec §3.1): a linked contact's birthday wins;
+/// the manual fields only fill in when no contact birthday exists. Every reader
+/// (engines, Compose, profile) goes through here so the sources can't drift.
+nonisolated enum BirthdayResolution {
+    static func effectiveBirthday(contact: DateComponents?, manual: DateComponents?) -> DateComponents? {
+        contact ?? manual
     }
 }
 
@@ -82,5 +101,18 @@ nonisolated enum BirthdayMath {
             }
         }
         return nil
+    }
+
+    /// Valid day-of-month range for the editor wheels. Without a year, February
+    /// allows 29 so Feb-29 birthdays stay enterable.
+    static func validDayRange(month: Int, year: Int?, calendar: Calendar = .current) -> ClosedRange<Int> {
+        var components = DateComponents()
+        components.year = year ?? 2000 // leap reference year when no year is chosen
+        components.month = month
+        guard let date = calendar.date(from: components),
+              let range = calendar.range(of: .day, in: .month, for: date) else {
+            return 1...31
+        }
+        return 1...(range.upperBound - 1)
     }
 }
