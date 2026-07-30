@@ -46,8 +46,7 @@ struct NudgeCardView: View {
             }
             .controlSize(.small)
         }
-        .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+        .emberCard()
         .sheet(isPresented: $showPerson) {
             NavigationStack {
                 PersonDetailView(person: person)

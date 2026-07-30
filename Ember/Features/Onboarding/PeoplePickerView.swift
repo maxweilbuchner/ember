@@ -4,11 +4,14 @@ import SwiftUI
 
 /// Search-and-select contacts to bring into Ember. Used by onboarding and by
 /// the People tab's add sheet.
-struct PeoplePickerView: View {
+struct PeoplePickerView<BarAccessory: View>: View {
     @Binding var drafts: [PersonDraft]
     var excludedContactIDs: Set<String> = []
     var continueTitle: String = String(localized: "Continue")
     var onContinue: () -> Void
+    /// Extra control rendered above the continue button in the bottom bar
+    /// (AddPeopleSheet's add-by-name field).
+    @ViewBuilder var barAccessory: () -> BarAccessory
 
     @Environment(AppServices.self) private var services
     @State private var searchText = ""
@@ -19,8 +22,7 @@ struct PeoplePickerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            List(visibleContacts, id: \.id) { contact in
+        List(visibleContacts, id: \.id) { contact in
                 Button {
                     toggle(contact)
                 } label: {
@@ -44,28 +46,31 @@ struct PeoplePickerView: View {
                         }
                     }
                 }
+        }
+        .overlay {
+            if contacts.isEmpty {
+                EmptyStateView(
+                    systemImage: "person.crop.circle.dashed",
+                    title: String(localized: "No contacts to show"),
+                    message: String(localized: "You can widen contact access in Settings, or add people later.")
+                )
             }
-            .overlay {
-                if contacts.isEmpty {
-                    EmptyStateView(
-                        systemImage: "person.crop.circle.dashed",
-                        title: String(localized: "No contacts to show"),
-                        message: String(localized: "You can widen contact access in Settings, or add people later.")
-                    )
+        }
+        .safeAreaInset(edge: .bottom) {
+            PinnedBottomBar {
+                barAccessory()
+                Button {
+                    onContinue()
+                } label: {
+                    Text(drafts.isEmpty ? String(localized: "Skip for now") : "\(continueTitle) (\(drafts.count))")
+                        .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-
-            Button {
-                onContinue()
-            } label: {
-                Text(drafts.isEmpty ? String(localized: "Skip for now") : "\(continueTitle) (\(drafts.count))")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding()
         }
         .searchable(text: $searchText, prompt: String(localized: "Search contacts"))
+        .emberCanvas()
         .navigationTitle(String(localized: "Pick your people"))
         .navigationBarTitleDisplayMode(.inline)
         .task(id: searchText) {
@@ -79,5 +84,22 @@ struct PeoplePickerView: View {
         } else {
             drafts.append(PersonDraft(contact: contact))
         }
+    }
+}
+
+extension PeoplePickerView where BarAccessory == EmptyView {
+    init(
+        drafts: Binding<[PersonDraft]>,
+        excludedContactIDs: Set<String> = [],
+        continueTitle: String = String(localized: "Continue"),
+        onContinue: @escaping () -> Void
+    ) {
+        self.init(
+            drafts: drafts,
+            excludedContactIDs: excludedContactIDs,
+            continueTitle: continueTitle,
+            onContinue: onContinue,
+            barAccessory: { EmptyView() }
+        )
     }
 }

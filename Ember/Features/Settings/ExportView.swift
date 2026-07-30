@@ -27,23 +27,25 @@ struct ExportView: View {
                     ShareLink(item: zipURL) {
                         Label(String(localized: "Save or share export"), systemImage: "square.and.arrow.up")
                     }
-                } else {
-                    Button {
-                        runExport()
-                    } label: {
-                        if isExporting {
-                            HStack(spacing: 8) {
-                                ProgressView()
-                                Text(String(localized: "Preparing…"))
-                            }
-                        } else {
-                            Label(String(localized: "Create export"), systemImage: "archivebox")
-                        }
-                    }
-                    .disabled(isExporting)
                 }
+                Button {
+                    runExport()
+                } label: {
+                    if isExporting {
+                        HStack(spacing: EmberTheme.spacingS) {
+                            ProgressView()
+                            Text(String(localized: "Preparing…"))
+                        }
+                    } else if zipURL != nil {
+                        // Data may have changed since the last zip — always offer a redo.
+                        Label(String(localized: "Create a fresh export"), systemImage: "arrow.clockwise")
+                    } else {
+                        Label(String(localized: "Create export"), systemImage: "archivebox")
+                    }
+                }
+                .disabled(isExporting)
                 if let exportError {
-                    Text(exportError)
+                    Label(exportError, systemImage: "exclamationmark.triangle")
                         .font(.footnote)
                         .foregroundStyle(.red)
                 }
@@ -70,6 +72,8 @@ struct ExportView: View {
                 Text(String(localized: "Removes every person, entry, and image from this device. There is no cloud copy — export first if you want one."))
             }
         }
+        .emberCanvas()
+        .sensoryFeedback(.success, trigger: zipURL)
         .navigationTitle(String(localized: "Your data"))
         .navigationBarTitleDisplayMode(.inline)
         .alert(String(localized: "Delete everything?"), isPresented: $showDeleteAlert) {

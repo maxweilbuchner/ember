@@ -13,6 +13,7 @@ struct InteractionLogSheet: View {
     @State private var note = ""
     @State private var date = Date.now
     @State private var isApproximate = false
+    @State private var saveCount = 0
 
     var body: some View {
         NavigationStack {
@@ -39,6 +40,7 @@ struct InteractionLogSheet: View {
                     Toggle(String(localized: "Rough date (\"sometime last week\")"), isOn: $isApproximate)
                 }
             }
+            .emberCanvas()
             .navigationTitle(String(localized: "With \(person.displayNameCache)"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -51,9 +53,11 @@ struct InteractionLogSheet: View {
             }
         }
         .presentationDetents([.medium, .large])
+        .sensoryFeedback(.success, trigger: saveCount)
     }
 
     private func save() {
+        saveCount += 1
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         modelContext.insert(Interaction(
             person: person,

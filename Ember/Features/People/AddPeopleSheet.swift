@@ -17,6 +17,7 @@ struct AddPeopleSheet: View {
     @State private var step: Step = .pick
     @State private var drafts: [PersonDraft] = []
     @State private var unlinkedName = ""
+    @State private var justAddedName: String?
 
     private var existingContactIDs: Set<String> {
         Set(existingPeople.compactMap(\.contactID))
@@ -26,27 +27,42 @@ struct AddPeopleSheet: View {
         NavigationStack {
             switch step {
             case .pick:
-                VStack(spacing: 0) {
-                    PeoplePickerView(
-                        drafts: $drafts,
-                        excludedContactIDs: existingContactIDs,
-                        continueTitle: String(localized: "Next")
-                    ) {
+                PeoplePickerView(
+                    drafts: $drafts,
+                    excludedContactIDs: existingContactIDs,
+                    continueTitle: String(localized: "Next"),
+                    onContinue: {
                         if drafts.isEmpty {
                             dismiss()
                         } else {
                             step = .tiers
                         }
-                    }
-                    HStack {
-                        TextField(String(localized: "Or add someone by name only…"), text: $unlinkedName)
-                            .textFieldStyle(.roundedBorder)
-                        Button(String(localized: "Add")) {
-                            addUnlinked()
+                    },
+                    barAccessory: {
+                        VStack(spacing: EmberTheme.spacingS) {
+                            HStack {
+                                TextField(String(localized: "Or add someone by name only…"), text: $unlinkedName)
+                                    .textFieldStyle(.roundedBorder)
+                                Button(String(localized: "Add")) {
+                                    addUnlinked()
+                                }
+                                .disabled(unlinkedName.trimmingCharacters(in: .whitespaces).isEmpty)
+                            }
+                            if let justAddedName {
+                                Text(String(localized: "Added \(justAddedName) — pick more people or continue."))
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .transition(.opacity)
+                            }
                         }
-                        .disabled(unlinkedName.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .animation(EmberTheme.calm, value: justAddedName)
                     }
-                    .padding([.horizontal, .bottom])
+                )
+                .onChange(of: unlinkedName) { _, newValue in
+                    if !newValue.isEmpty {
+                        justAddedName = nil
+                    }
                 }
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -54,7 +70,10 @@ struct AddPeopleSheet: View {
                     }
                 }
             case .tiers:
-                TierAssignmentView(drafts: $drafts) {
+                TierAssignmentView(
+                    drafts: $drafts,
+                    partnerAlreadyExists: existingPeople.contains(where: \.isPartnerMode)
+                ) {
                     saveDrafts()
                 }
             }
@@ -67,7 +86,8 @@ struct AddPeopleSheet: View {
         modelContext.insert(Person(displayNameCache: name))
         try? modelContext.save()
         unlinkedName = ""
-        dismiss()
+        // Stay open: in-progress contact selections must survive a by-name add.
+        justAddedName = name
     }
 
     private func saveDrafts() {

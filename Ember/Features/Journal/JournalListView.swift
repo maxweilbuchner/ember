@@ -65,8 +65,22 @@ struct JournalListView: View {
                         }
                     }
                     .searchable(text: $searchText, prompt: String(localized: "Search entries"))
+                    .overlay {
+                        if filteredEntries.isEmpty {
+                            if !searchText.trimmingCharacters(in: .whitespaces).isEmpty {
+                                ContentUnavailableView.search(text: searchText)
+                            } else if selectedDay != nil {
+                                EmptyStateView(
+                                    systemImage: "calendar",
+                                    title: String(localized: "A quiet day"),
+                                    message: String(localized: "Nothing was captured here. Try another day, or show all entries.")
+                                )
+                            }
+                        }
+                    }
                 }
             }
+            .emberCanvas()
             .navigationTitle(String(localized: "Journal"))
             .toolbar {
                 if !entries.isEmpty {
@@ -76,6 +90,7 @@ struct JournalListView: View {
                         } label: {
                             Image(systemName: "calendar")
                         }
+                        .accessibilityLabel(String(localized: "Jump to day"))
                     }
                 }
             }
@@ -94,19 +109,32 @@ private struct DayPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            DatePicker(String(localized: "Jump to day"), selection: $day, in: ...Date.now, displayedComponents: [.date])
-                .datePickerStyle(.graphical)
-                .padding()
-                .navigationTitle(String(localized: "Jump to day"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "Show")) {
-                            selectedDay = day
-                            dismiss()
-                        }
+            VStack(spacing: EmberTheme.spacingM) {
+                DatePicker(String(localized: "Jump to day"), selection: $day, in: ...Date.now, displayedComponents: [.date])
+                    .datePickerStyle(.graphical)
+                if selectedDay != nil {
+                    Button(String(localized: "Show all days")) {
+                        selectedDay = nil
+                        dismiss()
                     }
                 }
+            }
+            .padding()
+            .frame(maxHeight: .infinity, alignment: .top)
+            .emberCanvas()
+            .navigationTitle(String(localized: "Jump to day"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "Cancel")) { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "Show")) {
+                        selectedDay = day
+                        dismiss()
+                    }
+                }
+            }
         }
     }
 }

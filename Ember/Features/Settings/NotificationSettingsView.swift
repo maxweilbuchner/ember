@@ -31,6 +31,7 @@ struct NotificationSettingsView: View {
                 Text(String(localized: "Ember sends at most three nudges a week, each with context and a reason. Birthday reminders arrive the morning of, with a heads-up three days ahead for planning."))
             }
         }
+        .emberCanvas()
         .navigationTitle(String(localized: "Nudges & birthdays"))
         .navigationBarTitleDisplayMode(.inline)
         .task { await refreshStatus() }

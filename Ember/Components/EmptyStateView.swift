@@ -12,7 +12,7 @@ struct EmptyStateView: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: systemImage)
-                .font(.system(size: 40))
+                .font(.system(size: EmberTheme.emptyStateIconSize))
                 .foregroundStyle(Color.accentColor.opacity(0.7))
             Text(title)
                 .font(.headline)

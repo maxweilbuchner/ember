@@ -12,6 +12,7 @@ struct CaptureComposer: View {
     @FocusState private var isFocused: Bool
     @State private var text = ""
     @State private var hasAutoFocused = false
+    @State private var saveCount = 0
 
     private var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -23,15 +24,18 @@ struct CaptureComposer: View {
                 .lineLimit(2...8)
                 .focused($isFocused)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 16).fill(Color(.secondarySystemGroupedBackground)))
+                .emberCardSurface()
 
             if !trimmedText.isEmpty {
                 Button(String(localized: "Save")) {
                     save()
                 }
                 .buttonStyle(.borderedProminent)
+                .transition(.opacity)
             }
         }
+        .animation(EmberTheme.calm, value: trimmedText.isEmpty)
+        .sensoryFeedback(.success, trigger: saveCount)
         .toolbar {
             // Standard iOS pattern (Notes): a nav-bar Done while editing.
             // A keyboard-toolbar item is wrong here — iOS 26 docks it as a
@@ -72,6 +76,7 @@ struct CaptureComposer: View {
         let entryText = entry.text
         let services = services
         Task { await services.extractEntry(id: entryID, text: entryText) }
+        saveCount += 1
         text = ""
         // Drop focus so the saved entry and its extraction chips are visible —
         // tapping the field again is one tap if there's more to capture.

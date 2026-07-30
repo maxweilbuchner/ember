@@ -8,7 +8,9 @@ cd "$(dirname "$0")/.."
 export DEVELOPER_DIR=/Applications/Xcode.app
 DEVICE="iPhone 17 Pro Max"
 BUNDLE="com.maw.ember"
+APPEARANCE="${APPEARANCE:-light}"   # APPEARANCE=dark for a dark-mode set
 OUT="Screenshots"
+[ "$APPEARANCE" = "dark" ] && OUT="Screenshots/dark"
 DERIVED="build/DerivedData"
 
 ANNA="DE300002-0000-4000-8000-000000000002"   # DemoSeed.annaID
@@ -25,7 +27,7 @@ UDID=$(xcrun simctl list devices available | grep "$DEVICE (" | head -1 | grep -
 # relaunches and would photobomb every shot.
 xcrun simctl shutdown "$UDID" 2>/dev/null || true
 xcrun simctl bootstatus "$UDID" -b
-xcrun simctl ui "$UDID" appearance light
+xcrun simctl ui "$UDID" appearance "$APPEARANCE"
 xcrun simctl status_bar "$UDID" override --time "9:41" \
   --batteryState charged --batteryLevel 100 --cellularBars 4 --wifiBars 3
 xcrun simctl install "$UDID" "$APP"

@@ -19,7 +19,7 @@ struct PersonAvatarView: View {
             } else {
                 ZStack {
                     LinearGradient(
-                        colors: [Color(.emberAmber), Color(.emberTerracotta)],
+                        colors: [Color.accentColor, Color(.emberTerracotta)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )

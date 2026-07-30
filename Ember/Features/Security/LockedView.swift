@@ -9,24 +9,18 @@ struct LockedView: View {
     @State private var attemptFailed = false
 
     var body: some View {
-        ZStack {
-            Color(.emberCream)
-                .ignoresSafeArea()
-            VStack(spacing: 18) {
-                Image(systemName: "flame")
-                    .font(.system(size: 52))
-                    .foregroundStyle(Color.accentColor)
-                Text(String(localized: "Ember is locked"))
-                    .font(.title3.weight(.semibold))
-                if attemptFailed {
-                    Button(String(localized: "Unlock")) {
-                        Task { await tryUnlock() }
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
+        VStack(spacing: EmberTheme.spacingL) {
+            HeroHeader(systemImage: "flame", title: String(localized: "Ember is locked"))
+            if attemptFailed {
+                Button(String(localized: "Unlock")) {
+                    Task { await tryUnlock() }
                 }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(.emberCream).ignoresSafeArea())
         .task {
             await tryUnlock()
         }

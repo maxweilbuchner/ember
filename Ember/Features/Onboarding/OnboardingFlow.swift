@@ -7,8 +7,7 @@ import UserNotifications
 /// Target: under two minutes. Value promise → Contacts permission → pick your
 /// people into tiers (one optional partner) → notification permission. No account, ever.
 struct OnboardingFlow: View {
-    private enum Step {
-        case welcome
+    private enum Step: Hashable {
         case contacts
         case pick
         case tiers
@@ -18,105 +17,126 @@ struct OnboardingFlow: View {
     @Environment(AppServices.self) private var services
     @Environment(\.modelContext) private var modelContext
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var step: Step = .welcome
+    /// Welcome is the stack root; pushing steps gives native back navigation,
+    /// so a re-pick is always one swipe away.
+    @State private var path: [Step] = []
     @State private var drafts: [PersonDraft] = []
 
     var body: some View {
-        NavigationStack {
-            Group {
-                switch step {
-                case .welcome:
-                    welcome
-                case .contacts:
-                    contactsPermission
-                case .pick:
-                    PeoplePickerView(drafts: $drafts) {
-                        step = drafts.isEmpty ? .notifications : .tiers
-                    }
-                case .tiers:
-                    TierAssignmentView(drafts: $drafts) {
-                        step = .notifications
-                    }
-                case .notifications:
-                    notificationsPermission
+        NavigationStack(path: $path) {
+            welcome
+                .emberCanvas()
+                .navigationDestination(for: Step.self) { step in
+                    stepView(step)
+                        .emberCanvas()
                 }
-            }
         }
         .interactiveDismissDisabled()
     }
 
+    @ViewBuilder
+    private func stepView(_ step: Step) -> some View {
+        switch step {
+        case .contacts:
+            contactsPermission
+        case .pick:
+            PeoplePickerView(
+                drafts: $drafts,
+                onContinue: {
+                    path.append(drafts.isEmpty ? .notifications : .tiers)
+                },
+                barAccessory: {
+                    progressCaption(2)
+                }
+            )
+        case .tiers:
+            TierAssignmentView(drafts: $drafts, barCaption: progressText(3)) {
+                path.append(.notifications)
+            }
+        case .notifications:
+            notificationsPermission
+        }
+    }
+
+    private func progressText(_ step: Int) -> String {
+        String(localized: "Step \(step) of 4")
+    }
+
+    private func progressCaption(_ step: Int) -> some View {
+        Text(progressText(step))
+            .font(.footnote)
+            .foregroundStyle(.tertiary)
+    }
+
     private var welcome: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: EmberTheme.spacingXL) {
             Spacer()
-            Image(systemName: "flame")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
-            Text(String(localized: "Ember"))
-                .font(.largeTitle.weight(.bold))
-            Text(String(localized: "Keep the people you love warm. Ember remembers who matters, what you talked about, and quietly suggests when a message would land well."))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
+            HeroHeader(
+                systemImage: "flame",
+                title: String(localized: "Ember"),
+                message: String(localized: "Keep the people you love warm. Ember remembers who matters, what you talked about, and quietly suggests when a message would land well."),
+                style: .brand
+            )
             Text(String(localized: "Everything stays on this phone. No account, no cloud, no feed."))
                 .font(.footnote)
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
+                .padding(.horizontal, EmberTheme.spacingXL)
             Spacer()
-            Button(String(localized: "Get started")) {
-                step = .contacts
+        }
+        .safeAreaInset(edge: .bottom) {
+            PinnedBottomBar {
+                Button(String(localized: "Get started")) {
+                    path.append(.contacts)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .padding(.bottom, 32)
         }
     }
 
     private var contactsPermission: some View {
-        VStack(spacing: 20) {
+        VStack {
             Spacer()
-            Image(systemName: "person.crop.circle.badge.checkmark")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
-            Text(String(localized: "Link your contacts"))
-                .font(.title2.weight(.semibold))
-            Text(String(localized: "Ember reads names, photos, and birthdays straight from Contacts — nothing is copied or uploaded. You can share all contacts or just a few."))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
+            HeroHeader(
+                systemImage: "person.crop.circle.badge.checkmark",
+                title: String(localized: "Link your contacts"),
+                message: String(localized: "Ember reads names, photos, and birthdays straight from Contacts — nothing is copied or uploaded. You can share all contacts or just a few.")
+            )
             Spacer()
-            VStack(spacing: 12) {
+        }
+        .safeAreaInset(edge: .bottom) {
+            PinnedBottomBar {
+                progressCaption(1)
                 Button(String(localized: "Connect Contacts")) {
                     Task {
                         await services.contacts.requestAccess()
-                        step = .pick
+                        path.append(.pick)
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 Button(String(localized: "Not now")) {
-                    step = .notifications
+                    path.append(.notifications)
                 }
                 .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 32)
         }
     }
 
     private var notificationsPermission: some View {
-        VStack(spacing: 20) {
+        VStack {
             Spacer()
-            Image(systemName: "bell.badge")
-                .font(.system(size: 56))
-                .foregroundStyle(Color.accentColor)
-            Text(String(localized: "Gentle nudges"))
-                .font(.title2.weight(.semibold))
-            Text(String(localized: "At most three suggestions a week, each with context and never a guilt trip. Silence is fine too."))
-                .multilineTextAlignment(.center)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 24)
+            HeroHeader(
+                systemImage: "bell.badge",
+                title: String(localized: "Gentle nudges"),
+                message: String(localized: "At most three suggestions a week, each with context and never a guilt trip. Silence is fine too.")
+            )
             Spacer()
-            VStack(spacing: 12) {
+        }
+        .safeAreaInset(edge: .bottom) {
+            PinnedBottomBar {
+                progressCaption(4)
                 Button(String(localized: "Enable nudges")) {
                     Task {
                         _ = try? await UNUserNotificationCenter.current()
@@ -131,7 +151,6 @@ struct OnboardingFlow: View {
                 }
                 .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 32)
         }
     }
 

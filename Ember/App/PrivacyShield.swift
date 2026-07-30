@@ -11,12 +11,17 @@ struct PrivacyShield: ViewModifier {
     func body(content: Content) -> some View {
         content
             .overlay {
+                // Pure crossfades — fine under Reduce Motion.
                 if services.security.isLocked {
                     LockedView()
+                        .transition(.opacity)
                 } else if scenePhase != .active {
                     shield
+                        .transition(.opacity)
                 }
             }
+            .animation(EmberTheme.calm, value: services.security.isLocked)
+            .animation(EmberTheme.calm, value: scenePhase)
             .onChange(of: scenePhase) { _, phase in
                 if phase == .background {
                     services.security.lockIfEnabled()
@@ -29,7 +34,7 @@ struct PrivacyShield: ViewModifier {
             Rectangle()
                 .fill(.ultraThinMaterial)
             Image(systemName: "flame")
-                .font(.system(size: 48))
+                .font(.system(size: EmberTheme.heroIconSize))
                 .foregroundStyle(Color.accentColor)
         }
         .ignoresSafeArea()
