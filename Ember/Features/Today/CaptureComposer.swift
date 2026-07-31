@@ -4,14 +4,16 @@ import SwiftData
 import SwiftUI
 
 /// The capture field. Cold start to typing must stay under a second — the field
-/// focuses itself on appear, and saving keeps focus so several entries can be
-/// logged back-to-back.
+/// focuses itself as soon as the app is genuinely on screen, and saving keeps
+/// focus so several entries can be logged back-to-back.
 struct CaptureComposer: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(AppServices.self) private var services
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @FocusState private var isFocused: Bool
     @State private var text = ""
-    @State private var hasAutoFocused = false
+    @State private var autoFocusUsed = false
     @State private var saveCount = 0
 
     private var trimmedText: String {
@@ -48,24 +50,47 @@ struct CaptureComposer: View {
                 }
             }
         }
-        .onAppear {
-            // Auto-focus only on first appearance (cold start to typing < 1s);
-            // returning from another tab must not steal focus back.
-            if !hasAutoFocused {
-                hasAutoFocused = true
-                #if DEBUG
-                // Screenshot runs need the Today content, not the keyboard.
-                if DemoSeed.isActive { return }
-                #endif
+        // The keyboard may only come up once the app is actually on screen:
+        // focusing during the first layout pass raised it behind the lock
+        // screen, the onboarding cover and a nudge's Compose sheet (GH #12).
+        // `initial: true` covers "the gate is already open on appear"; the
+        // change path covers "it opens later" — unlock, sheet dismissed,
+        // onboarding finished. Returning from another tab must not steal focus
+        // back, which is what `autoFocusUsed` latches.
+        .onChange(of: focusInput, initial: true) { _, input in
+            switch CaptureFocusGate.decide(input) {
+            case .focus:
+                autoFocusUsed = true
+                if input.isCaptureRequested {
+                    services.router.captureRequested = false
+                }
                 isFocused = true
+            case .cancelAutoFocus:
+                autoFocusUsed = true
+            case .wait, .idle:
+                break
             }
         }
-        .onChange(of: services.router.captureRequested) { _, requested in
-            if requested {
-                isFocused = true
-                services.router.captureRequested = false
-            }
-        }
+    }
+
+    private var focusInput: CaptureFocusGate.Input {
+        CaptureFocusGate.Input(
+            isSceneActive: scenePhase == .active,
+            isLocked: services.security.isLocked,
+            isCoveredByModal: services.router.composePersonID != nil,
+            hasCompletedOnboarding: hasCompletedOnboarding,
+            autoFocusUsed: autoFocusUsed,
+            isCaptureRequested: services.router.captureRequested,
+            isDemoSeed: Self.isDemoSeed
+        )
+    }
+
+    private static var isDemoSeed: Bool {
+        #if DEBUG
+        return DemoSeed.isActive
+        #else
+        return false
+        #endif
     }
 
     private func save() {

@@ -41,7 +41,13 @@ struct RootView: View {
             guard phase == .active, hasCompletedOnboarding else { return }
             Task { await services.becameActive() }
         }
-        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding)) {
+        .fullScreenCover(isPresented: .constant(!hasCompletedOnboarding), onDismiss: {
+            // The cover is fully gone by the time this runs, so asking for the
+            // keyboard here can't focus into a window that isn't on screen yet
+            // (GH #12). Routed through the same request the capture widget uses,
+            // so CaptureFocusGate stays the one place that decides.
+            services.router.captureRequested = true
+        }) {
             OnboardingFlow()
         }
         .sheet(item: $router.composePersonID.asIdentifiable) { target in

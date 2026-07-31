@@ -17,6 +17,18 @@ struct DeepLinkTests {
         #expect(link == .compose(id))
     }
 
+    @MainActor
+    @Test func captureClearsAStaleComposeTarget() {
+        // Otherwise the old compose sheet sits on top of the capture field the
+        // user just asked for (GH #12).
+        let router = AppRouter()
+        router.handle(.compose(UUID()))
+        router.handle(.capture)
+        #expect(router.composePersonID == nil)
+        #expect(router.selectedTab == .today)
+        #expect(router.captureRequested)
+    }
+
     @Test func rejectsGarbage() {
         #expect(DeepLink(url: URL(string: "ember://compose/not-a-uuid")!) == nil)
         #expect(DeepLink(url: URL(string: "ember://compose")!) == nil)
