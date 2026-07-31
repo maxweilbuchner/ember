@@ -24,7 +24,7 @@ struct DateEngineTests {
         contacts: StubContacts = StubContacts(),
         calendar: Calendar? = nil
     ) throws -> Rig {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: configuration)
         let spy = SchedulerSpy()

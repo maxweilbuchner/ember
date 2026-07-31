@@ -51,7 +51,7 @@ struct DraftFallbackTests {
     // MARK: Engine wiring degrades gracefully
 
     @Test func engineWithNilProviderStillNudges() async throws {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let container = try ModelContainer(
             for: schema,
             configurations: ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)

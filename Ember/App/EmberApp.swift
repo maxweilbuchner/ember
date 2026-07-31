@@ -12,7 +12,7 @@ struct EmberApp: App {
     private let notificationDelegate: NotificationDelegate
 
     init() {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, cloudKitDatabase: .none)
         do {
             container = try ModelContainer(
