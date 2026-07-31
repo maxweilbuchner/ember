@@ -210,6 +210,8 @@ final class AppServices {
 final class AppRouter {
     var selectedTab: AppTab = .today
     /// Set when a deep link asks for the capture field (e.g. lock-screen widget).
+    /// Held until the composer can honour it — a request arriving while the app
+    /// is locked survives the unlock rather than being swallowed (GH #12).
     var captureRequested = false
     /// Person to open from a nudge notification tap; Compose proper arrives in M4.
     var composePersonID: UUID?
@@ -222,6 +224,9 @@ final class AppRouter {
     func handle(_ link: DeepLink) {
         switch link {
         case .capture:
+            // Newest link wins: a stale compose sheet would sit on top of the
+            // capture field the user just asked for.
+            composePersonID = nil
             selectedTab = .today
             captureRequested = true
         case .compose(let personID):
