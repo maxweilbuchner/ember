@@ -35,7 +35,11 @@ struct EmberApp: App {
 
         // Delegate assignment, category registration, and BGTask registration must
         // all happen before the app finishes launching — hence here in App.init.
-        let delegate = NotificationDelegate(engine: services.nudgeEngine, router: services.router)
+        let delegate = NotificationDelegate(
+            engine: services.nudgeEngine,
+            router: services.router,
+            container: container
+        )
         notificationDelegate = delegate
         let center = UNUserNotificationCenter.current()
         center.delegate = delegate

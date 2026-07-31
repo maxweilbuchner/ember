@@ -110,6 +110,7 @@ struct ExportRoundTripTests {
     @Test func deleteEverythingEmptiesTheStore() async throws {
         let container = try makeContainer()
         _ = try seed(container)
+        NotificationSettings.update(in: container.mainContext) { $0.nudgesEnabled = false }
 
         let service = ExportService(container: container)
         await service.deleteEverything()
@@ -124,5 +125,8 @@ struct ExportRoundTripTests {
         #expect(try context.fetch(FetchDescriptor<NudgeLog>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<NudgeRun>()).isEmpty)
         #expect(try context.fetch(FetchDescriptor<DateAlertRecord>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<NotificationSettings>()).isEmpty)
+        #expect(NotificationSettings.flags(in: context) == .allEnabled,
+                "a wiped store must not leave the app silently paused")
     }
 }
