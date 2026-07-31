@@ -17,6 +17,10 @@ nonisolated struct NotificationSpec: Sendable, Hashable {
 
 protocol NotificationScheduling: Sendable {
     func pendingIdentifiers() async -> [String]
+    /// Already-delivered requests still sitting in Notification Center — needed
+    /// to pull occasion alerts when the user switches them off (the nudge path
+    /// pulls its own by `NudgeLog.notificationID`).
+    func deliveredIdentifiers() async -> [String]
     /// Throws when the system refuses the request (e.g. notifications denied) —
     /// an expected state, handled by callers as a no-op.
     func add(_ spec: NotificationSpec) async throws
@@ -28,6 +32,10 @@ protocol NotificationScheduling: Sendable {
 nonisolated final class SystemNotificationScheduler: NotificationScheduling {
     func pendingIdentifiers() async -> [String] {
         await UNUserNotificationCenter.current().pendingNotificationRequests().map(\.identifier)
+    }
+
+    func deliveredIdentifiers() async -> [String] {
+        await UNUserNotificationCenter.current().deliveredNotifications().map(\.request.identifier)
     }
 
     func add(_ spec: NotificationSpec) async throws {

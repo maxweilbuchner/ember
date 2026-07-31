@@ -70,6 +70,13 @@ actor NudgeEngine {
 
     func evaluate(now: Date = .now) async {
         let context = ModelContext(container)
+        // Nudges switched off in Settings: no logs, no notifications, and — the
+        // load-bearing part — no NudgeRun row, so the staleness clock freezes at
+        // the moment they were switched off. Re-enabling after a long pause then
+        // evaluates immediately, while a quick off/on cycle stays silent and
+        // can't blow the ≤3-nudges-a-week ceiling (spec §1.3).
+        guard NotificationSettings.flags(in: context).nudgesEnabled else { return }
+
         let people = (try? context.fetch(FetchDescriptor<Person>())) ?? []
         let logs = (try? context.fetch(FetchDescriptor<NudgeLog>())) ?? []
 
@@ -139,6 +146,37 @@ actor NudgeEngine {
         context.insert(NudgeRun(date: now, selectedCount: selected.count))
         try? context.save()
         scheduleNextBackgroundRefresh(after: now)
+    }
+
+    // MARK: Pausing (Settings → Nudges & birthdays)
+
+    /// Nudges were switched off: close every open nudge, pull its notification,
+    /// and stop asking the system for background time. Today's "Worth a message"
+    /// section reads `.pending` logs, so it empties with them.
+    func cancelScheduledNudges() async {
+        let context = ModelContext(container)
+        let logs = (try? context.fetch(FetchDescriptor<NudgeLog>())) ?? []
+        // Every log that ever had a notification, not just the pending ones:
+        // `evaluate` expires stale logs without pulling their notifications, so
+        // filtering on `.pending` would strand banners in Notification Center.
+        let identifiers = logs.compactMap(\.notificationID)
+        if !identifiers.isEmpty {
+            await scheduler.removeDelivered(identifiers: identifiers)
+            await scheduler.removePending(identifiers: identifiers)
+        }
+        for log in logs where log.outcome == .pending {
+            log.outcome = .expired
+        }
+        try? context.save()
+        BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.taskIdentifier)
+    }
+
+    /// Nudges were switched back on: re-arm the background chain, which lapsed
+    /// while paused. Evaluation goes through the staleness check rather than
+    /// running outright — re-enabling must never force a nudge.
+    func resumeNudges(now: Date = .now) async {
+        scheduleNextBackgroundRefresh(after: now)
+        await evaluateIfStale(now: now)
     }
 
     // MARK: Notification action handlers (invoked without opening the app)

@@ -11,8 +11,11 @@ actor SchedulerSpy: NotificationScheduling {
     private(set) var removedPending: [String] = []
     private(set) var removedDelivered: [String] = []
     private(set) var pending: [String] = []
+    private(set) var delivered: [String] = []
 
     func pendingIdentifiers() -> [String] { pending }
+
+    func deliveredIdentifiers() -> [String] { delivered }
 
     func add(_ spec: NotificationSpec) {
         added.append(spec)
@@ -26,10 +29,15 @@ actor SchedulerSpy: NotificationScheduling {
 
     func removeDelivered(identifiers: [String]) {
         removedDelivered.append(contentsOf: identifiers)
+        delivered.removeAll { identifiers.contains($0) }
     }
 
     func seedPending(_ identifiers: [String]) {
         pending = identifiers
+    }
+
+    func seedDelivered(_ identifiers: [String]) {
+        delivered = identifiers
     }
 }
 
