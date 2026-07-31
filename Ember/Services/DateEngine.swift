@@ -47,14 +47,15 @@ actor DateEngine {
     }
 
     func refresh(now: Date = .now) async {
+        // Runs in both states: the cancel path when alerts are off, the
+        // anti-duplication sweep when they're on.
+        await cancelScheduledOccasions()
+        // Occasion alerts switched off in Settings. `upcoming` stays ungated
+        // below, so Today's read-only "Coming up" list is untouched — turning
+        // off alerts must not hide information (GH #10).
+        guard NotificationSettings.flags(in: ModelContext(container)).occasionAlertsEnabled else { return }
+
         let occasions = await upcoming(withinDays: 7, now: now)
-
-        let pending = await scheduler.pendingIdentifiers()
-        let stale = pending.filter { identifier in
-            Self.identifierPrefixes.contains { identifier.hasPrefix($0) }
-        }
-        await scheduler.removePending(identifiers: stale)
-
         let startOfToday = calendar.startOfDay(for: now)
         // iOS caps pending requests at 64 per app. Occasions arrive soonest-first
         // and produce ≤2 requests each, so trimming the tail keeps the nearest.
@@ -83,6 +84,27 @@ actor DateEngine {
                     catchesUpSameDay: false // a late "in 3 days" would be wrong
                 )
             }
+        }
+    }
+
+    /// Pulls every birthday/date notification, scheduled or already delivered.
+    /// The prefix filter is what keeps the two Settings switches independent:
+    /// this can never touch a `nudge-` identifier, and `cancelScheduledNudges`
+    /// removes by explicit `NudgeLog.notificationID`, so it can never touch one
+    /// of these.
+    func cancelScheduledOccasions() async {
+        func ours(_ identifiers: [String]) -> [String] {
+            identifiers.filter { identifier in
+                Self.identifierPrefixes.contains { identifier.hasPrefix($0) }
+            }
+        }
+        let stalePending = ours(await scheduler.pendingIdentifiers())
+        if !stalePending.isEmpty {
+            await scheduler.removePending(identifiers: stalePending)
+        }
+        let staleDelivered = ours(await scheduler.deliveredIdentifiers())
+        if !staleDelivered.isEmpty {
+            await scheduler.removeDelivered(identifiers: staleDelivered)
         }
     }
 

@@ -11,13 +11,17 @@ import Testing
 @Suite("Nudge engine integration")
 struct NudgeEngineIntegrationTests {
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: configuration)
     }
 
-    private func makeEngine(_ container: ModelContainer, contacts: StubContacts = StubContacts()) -> NudgeEngine {
-        NudgeEngine(container: container, contacts: contacts, scheduler: SchedulerSpy())
+    private func makeEngine(
+        _ container: ModelContainer,
+        contacts: StubContacts = StubContacts(),
+        scheduler: SchedulerSpy = SchedulerSpy()
+    ) -> NudgeEngine {
+        NudgeEngine(container: container, contacts: contacts, scheduler: scheduler)
     }
 
     private func overduePerson(_ name: String, in context: ModelContext) -> Person {
@@ -174,5 +178,136 @@ struct NudgeEngineIntegrationTests {
         #expect(names.contains("Close"))
         #expect(names.contains("Partner"), "partner gets birthdays even when paused")
         #expect(!names.contains("Orbit"), "orbit tier gets no birthday surfacing")
+    }
+
+    // MARK: The "Weekly nudges" switch (GH #10)
+
+    private func setNudges(_ enabled: Bool, in container: ModelContainer) {
+        NotificationSettings.update(in: container.mainContext) { $0.nudgesEnabled = enabled }
+    }
+
+    @Test func nudgesOffProducesNoLogsNoRunAndNoNotifications() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        setNudges(false, in: container)
+
+        let spy = SchedulerSpy()
+        await makeEngine(container, scheduler: spy).evaluate()
+
+        #expect(try context.fetch(FetchDescriptor<NudgeLog>()).isEmpty)
+        #expect(try context.fetch(FetchDescriptor<NudgeRun>()).isEmpty, "no run row: the staleness clock must freeze")
+        #expect(await spy.added.isEmpty)
+    }
+
+    @Test func pausingFreezesTheStalenessClock() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        let engine = makeEngine(container)
+        let t0 = Date.now
+
+        await engine.evaluate(now: t0)
+        #expect(try context.fetch(FetchDescriptor<NudgeRun>()).count == 1)
+
+        setNudges(false, in: container)
+        await engine.evaluate(now: t0.addingTimeInterval(10 * 86_400))
+        #expect(try context.fetch(FetchDescriptor<NudgeRun>()).count == 1, "a paused engine records nothing")
+
+        // Ten days of frozen clock means the first foreground after re-enabling
+        // is already stale, so nudges resume immediately.
+        setNudges(true, in: container)
+        await engine.resumeNudges(now: t0.addingTimeInterval(10 * 86_400))
+        #expect(try context.fetch(FetchDescriptor<NudgeRun>()).count == 2)
+    }
+
+    @Test func reEnablingWithinTheWeekStaysSilent() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        let engine = makeEngine(container)
+        let t0 = Date.now
+
+        await engine.evaluate(now: t0)
+        setNudges(false, in: container)
+        setNudges(true, in: container)
+        await engine.resumeNudges(now: t0.addingTimeInterval(2 * 86_400))
+
+        #expect(try context.fetch(FetchDescriptor<NudgeRun>()).count == 1,
+                "toggling off and on must not buy an extra run — that would blow the ≤3/week ceiling")
+    }
+
+    @Test func perPersonCooldownSurvivesAToggleCycle() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        let engine = makeEngine(container)
+        let t0 = Date.now
+
+        await engine.evaluate(now: t0)
+        setNudges(false, in: container)
+        await engine.cancelScheduledNudges()
+        setNudges(true, in: container)
+        await engine.evaluate(now: t0.addingTimeInterval(10 * 86_400))
+
+        #expect(try context.fetch(FetchDescriptor<NudgeLog>()).count == 1,
+                "expiring a log must not reset its date, or re-enabling would re-blast the same people")
+    }
+
+    @Test func cancellingExpiresOpenLogsAndPullsTheirNotifications() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        let spy = SchedulerSpy()
+        let engine = makeEngine(container, scheduler: spy)
+
+        await engine.evaluate()
+        let notificationID = try #require(context.fetch(FetchDescriptor<NudgeLog>()).first?.notificationID)
+
+        await engine.cancelScheduledNudges()
+
+        let logs = try context.fetch(FetchDescriptor<NudgeLog>())
+        #expect(logs.allSatisfy { $0.outcome == .expired })
+        #expect(await spy.removedPending.contains(notificationID))
+        #expect(await spy.removedDelivered.contains(notificationID))
+        #expect(await spy.pending.isEmpty)
+    }
+
+    @Test func cancellingAlsoPullsNotificationsOfAlreadyExpiredLogs() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        // `evaluate` expires week-old pending logs without pulling their
+        // notifications, so a `.pending`-only sweep would strand this banner.
+        context.insert(NudgeLog(
+            personID: UUID(),
+            score: 2,
+            reason: "It's been a while",
+            outcome: .expired,
+            notificationID: "nudge-stranded-123"
+        ))
+        try context.save()
+        let spy = SchedulerSpy()
+
+        await makeEngine(container, scheduler: spy).cancelScheduledNudges()
+
+        #expect(await spy.removedPending == ["nudge-stranded-123"])
+        #expect(await spy.removedDelivered == ["nudge-stranded-123"])
+    }
+
+    @Test func occasionAlertsOffDoesNotAffectNudgeEvaluation() async throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        _ = overduePerson("Anna", in: context)
+        try context.save()
+        NotificationSettings.update(in: container.mainContext) { $0.occasionAlertsEnabled = false }
+
+        await makeEngine(container).evaluate()
+
+        #expect(try context.fetch(FetchDescriptor<NudgeLog>()).count == 1, "the two switches are independent")
     }
 }

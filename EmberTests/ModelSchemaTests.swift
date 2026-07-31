@@ -9,7 +9,7 @@ import Testing
 @Suite("Model schema")
 struct ModelSchemaTests {
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: configuration)
     }
@@ -147,5 +147,44 @@ struct ModelSchemaTests {
         try context.save()
 
         #expect(try context.fetch(FetchDescriptor<NudgeLog>()).count == 1)
+    }
+
+    @Test func absentNotificationSettingsRowMeansEverythingOn() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        #expect(NotificationSettings.flags(in: context) == .allEnabled)
+        // Reading must never insert: the engines read through their own contexts.
+        #expect(try context.fetch(FetchDescriptor<NotificationSettings>()).isEmpty)
+    }
+
+    @Test func updatingNotificationSettingsKeepsExactlyOneRow() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+
+        NotificationSettings.update(in: context) { $0.nudgesEnabled = false }
+        NotificationSettings.update(in: context) { $0.occasionAlertsEnabled = false }
+
+        #expect(try context.fetch(FetchDescriptor<NotificationSettings>()).count == 1)
+        let flags = NotificationSettings.flags(in: context)
+        #expect(flags.nudgesEnabled == false)
+        #expect(flags.occasionAlertsEnabled == false)
+    }
+
+    @Test func updatingNotificationSettingsPrunesDuplicateRows() throws {
+        let container = try makeContainer()
+        let context = container.mainContext
+        let old = Date(timeIntervalSince1970: 1_000)
+        context.insert(NotificationSettings(nudgesEnabled: false, updatedAt: old))
+        context.insert(NotificationSettings(nudgesEnabled: true, updatedAt: old.addingTimeInterval(60)))
+        try context.save()
+
+        // Newest write wins before the older duplicate is dropped.
+        #expect(NotificationSettings.flags(in: context).nudgesEnabled == true)
+
+        NotificationSettings.update(in: context) { $0.occasionAlertsEnabled = false }
+
+        #expect(try context.fetch(FetchDescriptor<NotificationSettings>()).count == 1)
+        #expect(NotificationSettings.flags(in: context).nudgesEnabled == true)
     }
 }

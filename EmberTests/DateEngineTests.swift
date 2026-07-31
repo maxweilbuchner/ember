@@ -24,7 +24,7 @@ struct DateEngineTests {
         contacts: StubContacts = StubContacts(),
         calendar: Calendar? = nil
     ) throws -> Rig {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: configuration)
         let spy = SchedulerSpy()
@@ -413,5 +413,71 @@ struct DateEngineTests {
 
         let dayOf = try #require(await rig.spy.added.first { $0.identifier.hasSuffix("-day") })
         #expect(dayOf.identifier.contains("2027-03-01"))
+    }
+
+    // MARK: The "Birthdays & dates" switch (GH #10)
+
+    private func setOccasionAlerts(_ enabled: Bool, in container: ModelContainer) {
+        NotificationSettings.update(in: container.mainContext) { $0.occasionAlertsEnabled = enabled }
+    }
+
+    @Test func occasionAlertsOffSchedulesNothing() async throws {
+        let rig = try makeRig()
+        try person("Anna", birthday: DateComponents(month: 6, day: 15), in: rig.container)
+        setOccasionAlerts(false, in: rig.container)
+
+        await rig.engine.refresh(now: date(2026, 6, 10))
+
+        #expect(await rig.spy.added.isEmpty)
+    }
+
+    @Test func occasionAlertsOffStillKeepsTheComingUpList() async throws {
+        let rig = try makeRig()
+        try person("Anna", birthday: DateComponents(month: 6, day: 15), in: rig.container)
+        setOccasionAlerts(false, in: rig.container)
+
+        await rig.engine.refresh(now: date(2026, 6, 10))
+        let upcoming = await rig.engine.upcoming(withinDays: 7, now: date(2026, 6, 10))
+
+        #expect(upcoming.count == 1, "turning alerts off must not hide Today's Coming up list")
+        #expect(upcoming.first?.displayName == "Anna")
+    }
+
+    @Test func switchingAlertsOffSweepsOurRequestsAndSparesNudges() async throws {
+        let rig = try makeRig()
+        await rig.spy.seedPending(["birthday-anna-2026-06-15-day", "nudge-anna-1234"])
+        await rig.spy.seedDelivered(["date-x-2026-06-11-day", "nudge-cathi-5678"])
+        setOccasionAlerts(false, in: rig.container)
+
+        await rig.engine.refresh(now: date(2026, 6, 10))
+
+        #expect(await rig.spy.removedPending == ["birthday-anna-2026-06-15-day"])
+        #expect(await rig.spy.removedDelivered == ["date-x-2026-06-11-day"])
+        #expect(await rig.spy.pending == ["nudge-anna-1234"], "the nudge switch owns nudge- requests")
+    }
+
+    @Test func switchingAlertsBackOnReschedulesEverything() async throws {
+        let rig = try makeRig()
+        try person("Anna", birthday: DateComponents(month: 6, day: 15), in: rig.container)
+
+        setOccasionAlerts(false, in: rig.container)
+        await rig.engine.refresh(now: date(2026, 6, 10))
+        setOccasionAlerts(true, in: rig.container)
+        await rig.engine.refresh(now: date(2026, 6, 10))
+
+        let specs = await rig.spy.added
+        #expect(specs.count == 2)
+        #expect(specs.contains { $0.identifier.hasSuffix("-day") })
+        #expect(specs.contains { $0.identifier.hasSuffix("-headsup") })
+    }
+
+    @Test func nudgesOffDoesNotAffectOccasionScheduling() async throws {
+        let rig = try makeRig()
+        try person("Anna", birthday: DateComponents(month: 6, day: 15), in: rig.container)
+        NotificationSettings.update(in: rig.container.mainContext) { $0.nudgesEnabled = false }
+
+        await rig.engine.refresh(now: date(2026, 6, 10))
+
+        #expect(await rig.spy.added.count == 2, "the two switches are independent")
     }
 }

@@ -175,6 +175,27 @@ final class AppServices {
         }
     }
 
+    // MARK: Notification switches (Settings → Nudges & birthdays)
+
+    /// Persists the switch, then drives the engine. `update` saves before it
+    /// returns — the engines read through their own ModelContexts, which see
+    /// only committed main-context writes.
+    func setNudgesEnabled(_ enabled: Bool) async {
+        NotificationSettings.update(in: container.mainContext) { $0.nudgesEnabled = enabled }
+        if enabled {
+            await nudgeEngine.resumeNudges()
+        } else {
+            await nudgeEngine.cancelScheduledNudges()
+        }
+    }
+
+    /// `refresh` covers both directions: off sweeps and returns, on sweeps and
+    /// reschedules the full window.
+    func setOccasionAlertsEnabled(_ enabled: Bool) async {
+        NotificationSettings.update(in: container.mainContext) { $0.occasionAlertsEnabled = enabled }
+        await dateEngine.refresh()
+    }
+
     /// Called whenever the app becomes active: BGTask is best-effort,
     /// so staleness is re-checked in the foreground.
     func becameActive() async {

@@ -9,7 +9,7 @@ import Testing
 @Suite("Person merge & anonymize")
 struct PersonMergeTests {
     private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SchemaV1.self)
+        let schema = Schema(versionedSchema: CurrentSchema.self)
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: configuration)
     }

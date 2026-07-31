@@ -257,6 +257,10 @@ actor ExportService {
         wipe(NudgeLog.self)
         wipe(NudgeRun.self)
         wipe(DateAlertRecord.self)
+        // Deliberately wiped but never exported: the notification switches are a
+        // device preference like the app lock, not user data. Clearing them here
+        // is what stops a re-onboarded app from staying silently paused.
+        wipe(NotificationSettings.self)
         try? context.save()
 
         try? FileManager.default.removeItem(at: ImageStore.directory)

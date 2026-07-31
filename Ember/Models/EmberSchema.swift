@@ -21,7 +21,31 @@ nonisolated enum SchemaV1: VersionedSchema {
     }
 }
 
+/// Adds `NotificationSettings` (GH #10). No existing model type changed, so
+/// SchemaV1 still hashes to what's already on disk and the stage is a pure
+/// add-table.
+///
+/// Note the model types are shared between versions rather than copied per
+/// version — fine for a `.lightweight` stage, but a future *custom* stage will
+/// need version-scoped copies of whatever it transforms.
+nonisolated enum SchemaV2: VersionedSchema {
+    static var versionIdentifier: Schema.Version { Schema.Version(2, 0, 0) }
+
+    static var models: [any PersistentModel.Type] {
+        [
+            Person.self, Entry.self, Interaction.self, Commitment.self, Idea.self,
+            CustomDate.self, NudgeLog.self, NudgeRun.self, DateAlertRecord.self,
+            NotificationSettings.self,
+        ]
+    }
+}
+
+/// One place to bump, so the app and the tests can't drift apart.
+typealias CurrentSchema = SchemaV2
+
 nonisolated enum EmberMigrationPlan: SchemaMigrationPlan {
-    static var schemas: [any VersionedSchema.Type] { [SchemaV1.self] }
-    static var stages: [MigrationStage] { [] }
+    static var schemas: [any VersionedSchema.Type] { [SchemaV1.self, SchemaV2.self] }
+    static var stages: [MigrationStage] {
+        [.lightweight(fromVersion: SchemaV1.self, toVersion: SchemaV2.self)]
+    }
 }
