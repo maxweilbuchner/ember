@@ -5,12 +5,12 @@ import SwiftUI
 import UserNotifications
 
 /// Target: under two minutes. Value promise → Contacts permission → pick your
-/// people into tiers (one optional partner) → notification permission. No account, ever.
+/// people and how you keep in touch (one optional partner) → notification permission. No account, ever.
 struct OnboardingFlow: View {
     private enum Step: Hashable {
         case contacts
         case pick
-        case tiers
+        case keepInTouch
         case notifications
     }
 
@@ -43,14 +43,14 @@ struct OnboardingFlow: View {
             PeoplePickerView(
                 drafts: $drafts,
                 onContinue: {
-                    path.append(drafts.isEmpty ? .notifications : .tiers)
+                    path.append(drafts.isEmpty ? .notifications : .keepInTouch)
                 },
                 barAccessory: {
                     progressCaption(2)
                 }
             )
-        case .tiers:
-            TierAssignmentView(drafts: $drafts, barCaption: progressText(3)) {
+        case .keepInTouch:
+            KeepInTouchStep(drafts: $drafts, barCaption: progressText(3)) {
                 path.append(.notifications)
             }
         case .notifications:
@@ -155,24 +155,33 @@ struct OnboardingFlow: View {
     }
 
     private func finish() {
-        for draft in drafts {
-            let person = Person(
-                contactID: draft.contact.id,
-                displayNameCache: draft.contact.displayName,
-                tier: draft.tier,
-                isPartnerMode: draft.isPartner
-            )
-            modelContext.insert(person)
-        }
-        try? modelContext.save()
+        KeepInTouchAssignment.insert(drafts, context: modelContext)
         hasCompletedOnboarding = true
     }
 }
 
+/// Someone picked in an add flow, not yet saved. Either a contact or a
+/// by-name (unlinked) person — both go through the same keep-in-touch step.
 nonisolated struct PersonDraft: Identifiable, Sendable, Equatable {
-    var contact: ResolvedContact
+    var id: String
+    var contactID: String?
+    var displayName: String
     var tier: CadenceTier = .regular
     var isPartner: Bool = false
 
-    var id: String { contact.id }
+    init(contact: ResolvedContact) {
+        self.id = contact.id
+        self.contactID = contact.id
+        self.displayName = contact.displayName
+    }
+
+    init(unlinkedName: String) {
+        self.id = "unlinked-" + UUID().uuidString
+        self.contactID = nil
+        self.displayName = unlinkedName
+    }
+
+    var keepInTouch: KeepInTouch {
+        KeepInTouch(tier: tier, isPartner: isPartner)
+    }
 }

@@ -2,10 +2,11 @@
 
 import SwiftUI
 
+/// A person's keep-in-touch choice as a chip ("Close", "♥ Partner").
 struct TierBadge: View {
-    let tier: CadenceTier
+    let choice: KeepInTouch
 
     var body: some View {
-        EmberChip(text: tier.title)
+        EmberChip(text: choice.title, systemImage: choice.systemImage)
     }
 }

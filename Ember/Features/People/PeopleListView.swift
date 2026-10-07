@@ -13,8 +13,10 @@ struct PeopleListView: View {
         people.filter { !$0.isPlaceholder }
     }
 
-    private func people(in tier: CadenceTier) -> [Person] {
-        visiblePeople.filter { $0.tier == tier }
+    /// Grouped by keep-in-touch choice, so the partner sits in its own section
+    /// instead of under a cadence that doesn't apply to them.
+    private func people(in choice: KeepInTouch) -> [Person] {
+        visiblePeople.filter { $0.keepInTouch == choice }
     }
 
     var body: some View {
@@ -29,11 +31,11 @@ struct PeopleListView: View {
                     )
                 } else {
                     List {
-                        ForEach(CadenceTier.allCases, id: \.self) { tier in
-                            let tierPeople = people(in: tier)
-                            if !tierPeople.isEmpty {
-                                Section(tier.title) {
-                                    ForEach(tierPeople) { person in
+                        ForEach(KeepInTouch.allCases, id: \.self) { choice in
+                            let sectionPeople = people(in: choice)
+                            if !sectionPeople.isEmpty {
+                                Section(choice.title) {
+                                    ForEach(sectionPeople) { person in
                                         NavigationLink {
                                             PersonDetailView(person: person)
                                         } label: {
