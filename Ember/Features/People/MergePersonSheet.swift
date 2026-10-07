@@ -52,7 +52,7 @@ struct MergePersonSheet: View {
                         Text(person.displayNameCache)
                             .foregroundStyle(.primary)
                         Spacer()
-                        TierBadge(tier: person.tier)
+                        TierBadge(choice: person.keepInTouch)
                     }
                 }
             }

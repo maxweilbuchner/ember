@@ -202,8 +202,8 @@ struct PersonDetailView: View {
                     HStack(spacing: 8) {
                         Text(person.displayNameCache)
                             .font(.title3.weight(.semibold))
-                        if let relationLabel = meRelationLabel ?? person.manualRelation?.title {
-                            EmberChip(text: relationLabel, systemImage: "person.2")
+                        if let relationChip {
+                            EmberChip(text: relationChip.text, systemImage: relationChip.systemImage)
                         }
                     }
                     if let last = person.interactions.max(by: { $0.date < $1.date }) {
@@ -213,17 +213,21 @@ struct PersonDetailView: View {
                     }
                 }
             }
-            Picker(String(localized: "Cadence"), selection: $person.tier) {
-                ForEach(CadenceTier.allCases, id: \.self) { tier in
-                    Text(tier.title).tag(tier)
-                }
-            }
-            Toggle(String(localized: "Partner"), isOn: partnerBinding)
+            KeepInTouchPicker(selection: keepInTouchBinding)
         } footer: {
-            if person.isPartnerMode {
-                Text(String(localized: "Partners are never nudged about staying in touch — birthdays, commitments, and ideas still show up."))
-            }
+            Text(person.keepInTouch.explanation)
         }
+    }
+
+    /// The header chip: the relation label when there is one, with the ♥ when
+    /// they're the partner; "Partner" alone when partner mode has no label.
+    /// Partner mode drives the heart, never the other way round (§6.4).
+    private var relationChip: (text: String, systemImage: String)? {
+        let label = meRelationLabel ?? person.manualRelation?.title
+        if person.isPartnerMode {
+            return (text: label ?? KeepInTouch.partner.title, systemImage: "heart.fill")
+        }
+        return label.map { (text: $0, systemImage: "person.2") }
     }
 
     private var datesSection: some View {
@@ -333,7 +337,7 @@ struct PersonDetailView: View {
                 if meRelationLabel == nil {
                     Picker(String(localized: "Relation to you"), selection: manualRelationBinding) {
                         Text(String(localized: "None")).tag(RelationKind?.none)
-                        ForEach(RelationKind.allCases, id: \.self) { kind in
+                        ForEach(manualRelationChoices, id: \.self) { kind in
                             Text(kind.title).tag(RelationKind?.some(kind))
                         }
                     }
@@ -365,6 +369,13 @@ struct PersonDetailView: View {
         return (try? modelContext.fetch(descriptor))?.first
     }
 
+    /// Partner is chosen once, under Keep in touch — so the manual label list
+    /// doesn't offer a second, disconnected "Partner"/"Spouse". A label set
+    /// before this change stays selectable so it's never silently dropped.
+    private var manualRelationChoices: [RelationKind] {
+        RelationKind.allCases.filter { !$0.isPartnerLike || $0 == person.manualRelation }
+    }
+
     private var manualRelationBinding: Binding<RelationKind?> {
         Binding(
             get: { person.manualRelation },
@@ -375,20 +386,10 @@ struct PersonDetailView: View {
         )
     }
 
-    private var partnerBinding: Binding<Bool> {
+    private var keepInTouchBinding: Binding<KeepInTouch> {
         Binding(
-            get: { person.isPartnerMode },
-            set: { newValue in
-                if newValue {
-                    // Only one partner: quietly clear the flag elsewhere.
-                    let others = (try? modelContext.fetch(FetchDescriptor<Person>())) ?? []
-                    for other in others where other.isPartnerMode && other.id != person.id {
-                        other.isPartnerMode = false
-                    }
-                }
-                person.isPartnerMode = newValue
-                try? modelContext.save()
-            }
+            get: { person.keepInTouch },
+            set: { KeepInTouchAssignment.apply($0, to: person, context: modelContext) }
         )
     }
 

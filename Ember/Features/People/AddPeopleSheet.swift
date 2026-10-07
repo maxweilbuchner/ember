@@ -3,12 +3,13 @@
 import SwiftData
 import SwiftUI
 
-/// Add more people after onboarding: same picker + tier steps, or create an
-/// unlinked person by name when they're not in Contacts.
+/// Add more people after onboarding: same picker + keep-in-touch steps as
+/// onboarding. People added by name only (not in Contacts) join the same
+/// keep-in-touch step, so nobody skips it.
 struct AddPeopleSheet: View {
     private enum Step {
         case pick
-        case tiers
+        case keepInTouch
     }
 
     @Environment(\.modelContext) private var modelContext
@@ -35,7 +36,7 @@ struct AddPeopleSheet: View {
                         if drafts.isEmpty {
                             dismiss()
                         } else {
-                            step = .tiers
+                            step = .keepInTouch
                         }
                     },
                     barAccessory: {
@@ -69,12 +70,13 @@ struct AddPeopleSheet: View {
                         Button(String(localized: "Cancel")) { dismiss() }
                     }
                 }
-            case .tiers:
-                TierAssignmentView(
+            case .keepInTouch:
+                KeepInTouchStep(
                     drafts: $drafts,
-                    partnerAlreadyExists: existingPeople.contains(where: \.isPartnerMode)
+                    existingPartnerName: existingPeople.first(where: \.isPartnerMode)?.displayNameCache
                 ) {
-                    saveDrafts()
+                    KeepInTouchAssignment.insert(drafts, context: modelContext)
+                    dismiss()
                 }
             }
         }
@@ -83,24 +85,10 @@ struct AddPeopleSheet: View {
     private func addUnlinked() {
         let name = unlinkedName.trimmingCharacters(in: .whitespaces)
         guard !name.isEmpty else { return }
-        modelContext.insert(Person(displayNameCache: name))
-        try? modelContext.save()
+        // Held as a draft like any contact pick, so they get the same
+        // keep-in-touch step — and in-progress selections survive.
+        drafts.append(PersonDraft(unlinkedName: name))
         unlinkedName = ""
-        // Stay open: in-progress contact selections must survive a by-name add.
         justAddedName = name
-    }
-
-    private func saveDrafts() {
-        let hasExistingPartner = existingPeople.contains(where: \.isPartnerMode)
-        for draft in drafts {
-            modelContext.insert(Person(
-                contactID: draft.contact.id,
-                displayNameCache: draft.contact.displayName,
-                tier: draft.tier,
-                isPartnerMode: draft.isPartner && !hasExistingPartner
-            ))
-        }
-        try? modelContext.save()
-        dismiss()
     }
 }

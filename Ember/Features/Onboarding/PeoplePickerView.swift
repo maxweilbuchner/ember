@@ -37,7 +37,7 @@ struct PeoplePickerView<BarAccessory: View>: View {
                             }
                         }
                         Spacer()
-                        if drafts.contains(where: { $0.contact.id == contact.id }) {
+                        if drafts.contains(where: { $0.contactID == contact.id }) {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundStyle(Color.accentColor)
                         } else {
@@ -79,7 +79,7 @@ struct PeoplePickerView<BarAccessory: View>: View {
     }
 
     private func toggle(_ contact: ResolvedContact) {
-        if let index = drafts.firstIndex(where: { $0.contact.id == contact.id }) {
+        if let index = drafts.firstIndex(where: { $0.contactID == contact.id }) {
             drafts.remove(at: index)
         } else {
             drafts.append(PersonDraft(contact: contact))

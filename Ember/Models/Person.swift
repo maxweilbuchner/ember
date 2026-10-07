@@ -47,6 +47,11 @@ nonisolated final class Person {
         set { manualRelationRaw = newValue?.rawValue }
     }
 
+    /// Read-only fold of `tier` + `isPartnerMode`; write via `KeepInTouchAssignment`.
+    var keepInTouch: KeepInTouch {
+        KeepInTouch(tier: tier, isPartner: isPartnerMode)
+    }
+
     @Relationship(deleteRule: .cascade, inverse: \Interaction.person)
     var interactions: [Interaction] = []
 
@@ -83,7 +88,9 @@ nonisolated final class Person {
 
 /// Manual relation-to-you labels — the fallback when no contact card supplies
 /// one. Purely descriptive: `.partner`/`.spouse` here does NOT toggle Partner
-/// mode, which stays its own explicit switch (spec §6.4).
+/// mode, which stays its own explicit choice under Keep in touch (spec §6.4).
+/// The picker no longer offers those two (see `isPartnerLike`); they remain
+/// decodable for labels set earlier.
 nonisolated enum RelationKind: String, Codable, CaseIterable, Sendable {
     case mother, father, parent
     case sister, brother, sibling
@@ -91,6 +98,11 @@ nonisolated enum RelationKind: String, Codable, CaseIterable, Sendable {
     case grandparent
     case spouse, partner
     case friend, colleague
+
+    /// Labels that duplicate Partner mode; hidden from the manual picker.
+    var isPartnerLike: Bool {
+        self == .spouse || self == .partner
+    }
 
     var title: String {
         switch self {
