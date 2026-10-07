@@ -106,12 +106,23 @@ nonisolated enum NudgeCopy {
         return first.lowercased() + text.dropFirst()
     }
 
+    /// Commitments are verb phrases typed after "You said you'd…", often
+    /// sentence-cased ("Send Anna the book"). Lowercases only a plain
+    /// capitalised first word, so names later on and acronyms ("CV") survive.
+    private static func verbPhrase(_ text: String) -> String {
+        let word = text.prefix { !$0.isWhitespace }
+        guard let first = word.first, first.isUppercase, word.count > 1,
+              word.dropFirst().allSatisfy({ !$0.isUppercase }),
+              !word.hasPrefix("I'") else { return text }
+        return first.lowercased() + text.dropFirst()
+    }
+
     /// The context line under a nudge card's name — the "Last time she was
     /// interviewing at Bain" half of §4.4. An open commitment beats the last
     /// note (it's the more useful opener); nil when there's nothing to say.
     static func cardContext(lastInteractionNote: String?, firstOpenCommitment: String?) -> String? {
         if let commitment = firstOpenCommitment?.trimmingCharacters(in: .whitespacesAndNewlines), !commitment.isEmpty {
-            return String(localized: "You said you'd \(clip(commitment, limit: 60))")
+            return String(localized: "You said you'd \(clip(verbPhrase(commitment), limit: 60))")
         }
         if let note = lastInteractionNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
             return String(localized: "Last time: \(clip(note, limit: 60))")

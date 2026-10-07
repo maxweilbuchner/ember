@@ -177,6 +177,12 @@ struct NeutralPhrasesTests {
         #expect(NudgeCopy.cardContext(lastInteractionNote: "  ", firstOpenCommitment: "") == nil)
     }
 
+    @Test func cardContextReadsCommitmentsMidSentence() {
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "Send Anna the book") == "You said you'd send Anna the book")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "CV feedback") == "You said you'd CV feedback")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "I'll call back") == "You said you'd I'll call back")
+    }
+
     @Test func journalAppearancesInflectSingularAndPlural() {
         // Guards the AttributedString localization path — String(localized:)
         // would leak the ^[…](inflect: true) markup verbatim into the UI.

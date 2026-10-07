@@ -8,12 +8,13 @@ Privacy-first iOS personal CRM. **`EMBER_SPEC.md` is the source of truth** — r
 
 ```bash
 env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -scheme Ember \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' build
 
 env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -scheme Ember \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' test
 ```
 
+- Pin `OS=26.5`: with Xcode 27 installed, a bare `name=iPhone 17 Pro` resolves to the iOS 27 runtime, which has no such device.
 - Swift 6 language mode, strict concurrency, `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`.
 - The pbxproj uses **synchronized file system groups**: a new `.swift` file under `Ember/` or `EmberTests/` joins its target automatically — never add per-file pbxproj entries.
 - Tests are Swift Testing (`@Test`/`#expect`), hosted in the app.
