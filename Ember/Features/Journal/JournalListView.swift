@@ -22,6 +22,26 @@ struct JournalListView: View {
         return result
     }
 
+    /// Entries grouped by calendar day, newest day first — a notebook reads
+    /// by day, and the date then needn't repeat on every row.
+    private var entriesByDay: [(day: Date, entries: [Entry])] {
+        let calendar = Calendar.current
+        let groups = Dictionary(grouping: filteredEntries) { calendar.startOfDay(for: $0.date) }
+        return groups.keys.sorted(by: >).map { day in
+            (day: day, entries: (groups[day] ?? []).sorted { $0.date > $1.date })
+        }
+    }
+
+    private func dayTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return String(localized: "Today") }
+        if calendar.isDateInYesterday(day) { return String(localized: "Yesterday") }
+        if calendar.isDate(day, equalTo: .now, toGranularity: .year) {
+            return day.formatted(.dateTime.weekday(.wide).day().month(.wide))
+        }
+        return day.formatted(.dateTime.weekday(.wide).day().month(.wide).year())
+    }
+
     var body: some View {
         NavigationStack {
             Group {
@@ -43,23 +63,14 @@ struct JournalListView: View {
                                     .font(.subheadline)
                             }
                         }
-                        ForEach(filteredEntries) { entry in
-                            NavigationLink {
-                                EntryDetailView(entry: entry)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(entry.previewLine)
-                                        .lineLimit(2)
-                                    HStack(spacing: 6) {
-                                        Text(entry.date.formatted(date: .abbreviated, time: .shortened))
-                                        if !entry.mentions.isEmpty {
-                                            Text("·")
-                                            Text(entry.mentions.map(\.displayNameCache).joined(separator: ", "))
-                                                .lineLimit(1)
-                                        }
+                        ForEach(entriesByDay, id: \.day) { group in
+                            Section(dayTitle(group.day)) {
+                                ForEach(group.entries) { entry in
+                                    NavigationLink {
+                                        EntryDetailView(entry: entry)
+                                    } label: {
+                                        JournalRow(entry: entry)
                                     }
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
                                 }
                             }
                         }
@@ -98,6 +109,28 @@ struct JournalListView: View {
                 DayPickerSheet(selectedDay: $selectedDay)
                     .presentationDetents([.medium])
             }
+        }
+    }
+}
+
+private struct JournalRow: View {
+    let entry: Entry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(entry.previewLine)
+                .lineLimit(2)
+            HStack(spacing: 6) {
+                Text(entry.date, style: .time)
+                let names = entry.mentions.map { NameMatcher.compactName($0.displayNameCache) }
+                if !names.isEmpty {
+                    Text(verbatim: "·")
+                    Text(names.joined(separator: ", "))
+                        .lineLimit(1)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
     }
 }

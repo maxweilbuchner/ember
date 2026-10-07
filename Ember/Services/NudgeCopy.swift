@@ -106,10 +106,21 @@ nonisolated enum NudgeCopy {
         return first.lowercased() + text.dropFirst()
     }
 
+    /// The context line under a nudge card's name — the "Last time she was
+    /// interviewing at Bain" half of §4.4. An open commitment beats the last
+    /// note (it's the more useful opener); nil when there's nothing to say.
+    static func cardContext(lastInteractionNote: String?, firstOpenCommitment: String?) -> String? {
+        if let commitment = firstOpenCommitment?.trimmingCharacters(in: .whitespacesAndNewlines), !commitment.isEmpty {
+            return String(localized: "You said you'd \(clip(commitment, limit: 60))")
+        }
+        if let note = lastInteractionNote?.trimmingCharacters(in: .whitespacesAndNewlines), !note.isEmpty {
+            return String(localized: "Last time: \(clip(note, limit: 60))")
+        }
+        return nil
+    }
+
     private static func clip(_ text: String, limit: Int = 80) -> String {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count > limit else { return trimmed }
-        return String(trimmed.prefix(limit)).trimmingCharacters(in: .whitespaces) + "…"
+        NeutralPhrases.clip(text, limit: limit)
     }
 }
 
@@ -155,9 +166,26 @@ nonisolated enum NeutralPhrases {
     }
 
     /// "Last: coffee, mid-June" — note if there is one, else the channel word.
+    /// The note is clipped at a word so the date half always survives.
     static func lastContact(channel: Channel, note: String?, date: Date, now: Date = .now) -> String {
         let what = (note?.isEmpty == false ? note! : channel.title.lowercased())
-        let shortWhat = what.count > 30 ? String(what.prefix(30)) + "…" : what
-        return String(localized: "Last: \(shortWhat), \(phrase(for: date, now: now))")
+        return String(localized: "Last: \(clip(what, limit: 30)), \(phrase(for: date, now: now))")
+    }
+
+    /// Shortens free text to `limit` characters, breaking at the last word
+    /// boundary when one is reasonably close, so nothing ends mid-word.
+    static func clip(_ text: String, limit: Int) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count > limit else { return trimmed }
+        var cut = String(trimmed.prefix(limit))
+        if let lastSpace = cut.lastIndex(where: \.isWhitespace),
+           cut.distance(from: cut.startIndex, to: lastSpace) >= limit / 2 {
+            cut = String(cut[..<lastSpace])
+        }
+        // Drop a dangling "—" or "," left at the break, never the whole thing.
+        while let last = cut.last, last.isWhitespace || last.isPunctuation, cut.count > 1 {
+            cut.removeLast()
+        }
+        return cut + "…"
     }
 }

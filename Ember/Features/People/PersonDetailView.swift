@@ -32,10 +32,29 @@ struct PersonDetailView: View {
         return person.contactID == nil || isUnresolvable
     }
 
+    /// Interactions and journal mentions, newest first. An interaction that was
+    /// logged from an entry is the same moment as that entry's mention, so it
+    /// shows once — as the entry, wearing the interaction's channel icon.
     private var timeline: [TimelineItem] {
-        let interactions = person.interactions.map(TimelineItem.interaction)
+        let mentionIDs = Set(person.mentions.map(\.id))
+        let interactions = person.interactions
+            .filter { interaction in
+                guard let sourceID = interaction.sourceEntryID else { return true }
+                return !mentionIDs.contains(sourceID)
+            }
+            .map(TimelineItem.interaction)
         let mentions = person.mentions.map(TimelineItem.mention)
         return (interactions + mentions).sorted { $0.date > $1.date }
+    }
+
+    private var channelByEntryID: [UUID: Channel] {
+        var result: [UUID: Channel] = [:]
+        for interaction in person.interactions {
+            if let sourceID = interaction.sourceEntryID {
+                result[sourceID] = interaction.channel
+            }
+        }
+        return result
     }
 
     /// Canonical precedence: the linked contact's birthday wins, manual fills in.
@@ -61,22 +80,17 @@ struct PersonDetailView: View {
     }
 
     private var detailList: some View {
+        // Most actionable first: who they are and what to do, then what you
+        // owe them, then dates and labels, then the history.
         List {
             headerSection
-            datesSection
-            relationsSection
             if showsRelinkSection {
                 relinkSection
             }
-            Section {
-                Button {
-                    showLogSheet = true
-                } label: {
-                    Label(String(localized: "Log an interaction"), systemImage: "plus.bubble")
-                }
-            }
             commitmentsSection
             ideasSection
+            datesSection
+            relationsSection
             timelineSection
         }
         .emberCanvas()
@@ -213,6 +227,26 @@ struct PersonDetailView: View {
                     }
                 }
             }
+            HStack(spacing: EmberTheme.spacingS) {
+                Button {
+                    services.router.composePersonID = person.id
+                } label: {
+                    Label(String(localized: "Message"), systemImage: "paperplane.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
+                    showLogSheet = true
+                } label: {
+                    Label(String(localized: "Log"), systemImage: "plus.bubble")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(String(localized: "Log an interaction"))
+            }
+            // Bordered styles keep these two separate tap targets inside the
+            // List row (a plain-style row would fire both at once).
+            .listRowSeparator(.hidden)
             KeepInTouchPicker(selection: keepInTouchBinding)
         } footer: {
             Text(person.keepInTouch.explanation)
@@ -413,22 +447,18 @@ struct PersonDetailView: View {
     }
 
     private var commitmentsSection: some View {
-        Section(String(localized: "Commitments")) {
-            ForEach(person.commitments.sorted { $0.createdAt > $1.createdAt }) { commitment in
-                Button {
+        Section {
+            ForEach(openFirst(person.commitments, isDone: \.isDone, createdAt: \.createdAt)) { commitment in
+                checklistRow(text: commitment.text, isDone: commitment.isDone) {
                     commitment.isDone.toggle()
                     try? modelContext.save()
-                } label: {
-                    HStack {
-                        Image(systemName: commitment.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(commitment.isDone ? Color.accentColor : Color.secondary)
-                        Text(commitment.text)
-                            .strikethrough(commitment.isDone)
-                            .foregroundStyle(commitment.isDone ? .secondary : .primary)
-                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    deleteButton { modelContext.delete(commitment) }
                 }
             }
             TextField(String(localized: "You said you'd…"), text: $newCommitmentText)
+                .submitLabel(.done)
                 .onSubmit {
                     let trimmed = newCommitmentText.trimmingCharacters(in: .whitespaces)
                     guard !trimmed.isEmpty else { return }
@@ -436,26 +466,28 @@ struct PersonDetailView: View {
                     try? modelContext.save()
                     newCommitmentText = ""
                 }
+        } header: {
+            Text(String(localized: "Commitments"))
+        } footer: {
+            if person.commitments.isEmpty {
+                Text(String(localized: "Things you said you'd do. Open ones come up when Ember suggests reaching out."))
+            }
         }
     }
 
     private var ideasSection: some View {
-        Section(String(localized: "Ideas")) {
-            ForEach(person.ideas.sorted { $0.createdAt > $1.createdAt }) { idea in
-                Button {
+        Section {
+            ForEach(openFirst(person.ideas, isDone: \.isDone, createdAt: \.createdAt)) { idea in
+                checklistRow(text: idea.text, isDone: idea.isDone) {
                     idea.isDone.toggle()
                     try? modelContext.save()
-                } label: {
-                    HStack {
-                        Image(systemName: idea.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(idea.isDone ? Color.accentColor : Color.secondary)
-                        Text(idea.text)
-                            .strikethrough(idea.isDone)
-                            .foregroundStyle(idea.isDone ? .secondary : .primary)
-                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    deleteButton { modelContext.delete(idea) }
                 }
             }
             TextField(String(localized: "Gift idea, topic to raise…"), text: $newIdeaText)
+                .submitLabel(.done)
                 .onSubmit {
                     let trimmed = newIdeaText.trimmingCharacters(in: .whitespaces)
                     guard !trimmed.isEmpty else { return }
@@ -463,6 +495,45 @@ struct PersonDetailView: View {
                     try? modelContext.save()
                     newIdeaText = ""
                 }
+        } header: {
+            Text(String(localized: "Ideas"))
+        }
+    }
+
+    /// Open items first (newest on top), finished ones after — so the list
+    /// reads as what's left, not as a log.
+    private func openFirst<Item>(
+        _ items: [Item],
+        isDone: KeyPath<Item, Bool>,
+        createdAt: KeyPath<Item, Date>
+    ) -> [Item] {
+        items.sorted { lhs, rhs in
+            if lhs[keyPath: isDone] != rhs[keyPath: isDone] {
+                return !lhs[keyPath: isDone]
+            }
+            return lhs[keyPath: createdAt] > rhs[keyPath: createdAt]
+        }
+    }
+
+    private func checklistRow(text: String, isDone: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            HStack {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+                Text(text)
+                    .strikethrough(isDone)
+                    .foregroundStyle(isDone ? .secondary : .primary)
+            }
+        }
+        .accessibilityAddTraits(isDone ? .isSelected : [])
+    }
+
+    private func deleteButton(_ delete: @escaping () -> Void) -> some View {
+        Button(role: .destructive) {
+            delete()
+            try? modelContext.save()
+        } label: {
+            Label(String(localized: "Delete"), systemImage: "trash")
         }
     }
 
@@ -487,14 +558,27 @@ struct PersonDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    // A mistaken log shouldn't be permanent — it feeds the
+                    // nudge engine's sense of when you were last in touch.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        deleteButton { modelContext.delete(interaction) }
+                    }
                 case .mention(let entry):
                     NavigationLink {
                         EntryDetailView(entry: entry)
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "book.closed")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 22)
+                            if let channel = channelByEntryID[entry.id] {
+                                Image(systemName: channel.symbolName)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 22)
+                                    .accessibilityLabel(channel.title)
+                            } else {
+                                Image(systemName: "book.closed")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 22)
+                                    .accessibilityLabel(String(localized: "Journal mention"))
+                            }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.previewLine)
                                     .lineLimit(2)

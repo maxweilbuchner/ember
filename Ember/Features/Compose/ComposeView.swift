@@ -26,6 +26,8 @@ struct ComposeView: View {
     @State private var askIfSent = false
     @State private var awaitingSMSReturn = false
     @State private var sentCount = 0
+    @State private var copied = false
+    @State private var hasCopied = false
 
     private var lastInteractions: [Interaction] {
         person.interactions.sorted { $0.date > $1.date }.prefix(2).map { $0 }
@@ -47,6 +49,7 @@ struct ComposeView: View {
         .scrollDismissesKeyboard(.interactively)
         .emberCanvas()
         .sensoryFeedback(.success, trigger: sentCount)
+        .sensoryFeedback(.selection, trigger: copied) { _, isCopied in isCopied }
         .toolbar {
             if draftFocused {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -135,7 +138,7 @@ struct ComposeView: View {
                         .frame(width: 20)
                     Text(daysUntilBirthday == 0
                         ? String(localized: "Birthday today 🎂")
-                        : String(localized: "Birthday in \(daysUntilBirthday) days"))
+                        : String(localized: "Birthday \(NeutralPhrases.upcoming(daysAway: daysUntilBirthday))"))
                         .font(.subheadline)
                 }
             }
@@ -204,13 +207,38 @@ struct ComposeView: View {
                     .foregroundStyle(.secondary)
             }
             Button {
-                UIPasteboard.general.string = draft
+                copyDraft()
             } label: {
-                Label(String(localized: "Copy message"), systemImage: "doc.on.doc")
-                    .frame(maxWidth: .infinity)
+                Label(
+                    copied ? String(localized: "Copied") : String(localized: "Copy message"),
+                    systemImage: copied ? "checkmark" : "doc.on.doc"
+                )
+                .contentTransition(.symbolEffect(.replace))
+                .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .disabled(draft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            if hasCopied && phoneNumber == nil {
+                // Copy is the whole send path here, so the "did you send it?"
+                // question would otherwise never come.
+                Button(String(localized: "I sent it — log it")) {
+                    logSentInteraction()
+                }
+                .font(.subheadline)
+                .transition(.opacity)
+            }
+        }
+    }
+
+    private func copyDraft() {
+        UIPasteboard.general.string = draft
+        withAnimation(EmberTheme.calm) {
+            copied = true
+            hasCopied = true
+        }
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            withAnimation(EmberTheme.calm) { copied = false }
         }
     }
 
