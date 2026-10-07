@@ -20,6 +20,13 @@ struct PersonDetailView: View {
     @State private var confirmDelete = false
     @State private var newCommitmentText = ""
     @State private var newIdeaText = ""
+    @State private var adding: AddField?
+    @State private var headerScrolledAway = false
+    @FocusState private var focusedField: AddField?
+
+    private enum AddField: Hashable {
+        case commitment, idea
+    }
 
     private var isUnresolvable: Bool {
         person.contactID != nil && checkedResolution && resolvedContact == nil
@@ -87,16 +94,43 @@ struct PersonDetailView: View {
             if showsRelinkSection {
                 relinkSection
             }
-            commitmentsSection
-            ideasSection
+            if person.commitments.isEmpty && person.ideas.isEmpty {
+                // Nothing noted yet: two quiet add rows, not two empty sections.
+                Section {
+                    commitmentAdder
+                    ideaAdder
+                }
+            } else {
+                commitmentsSection
+                ideasSection
+            }
             datesSection
             relationsSection
+            keepInTouchSection
             timelineSection
         }
         .emberCanvas()
+        // The header card already names them; the bar only does once it has
+        // scrolled away (Contacts-style). The title still labels the back button.
         .navigationTitle(person.displayNameCache)
         .navigationBarTitleDisplayMode(.inline)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top > 90
+        } action: { _, scrolledAway in
+            withAnimation(EmberTheme.calm) { headerScrolledAway = scrolledAway }
+        }
+        .onChange(of: focusedField) { _, field in
+            // Leaving an empty add field folds it back into its add row.
+            if field == nil { adding = nil }
+        }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(person.displayNameCache)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(headerScrolledAway ? 1 : 0)
+                    .accessibilityHidden(!headerScrolledAway)
+            }
             ToolbarItem {
                 Menu {
                     Button(role: .destructive) {
@@ -210,36 +244,37 @@ struct PersonDetailView: View {
 
     private var headerSection: some View {
         Section {
-            HStack(spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 PersonAvatarView(person: person, size: 56)
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(person.displayNameCache)
-                            .font(.title3.weight(.semibold))
-                        if let relationChip {
-                            EmberChip(text: relationChip.text, systemImage: relationChip.systemImage)
-                        }
+                    Text(person.displayNameCache)
+                        .font(.title3.weight(.semibold))
+                    if let relationChip {
+                        EmberChip(text: relationChip.text, systemImage: relationChip.systemImage)
                     }
-                    if let last = person.interactions.max(by: { $0.date < $1.date }) {
+                    if let occasionLine {
+                        Text(occasionLine)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.accentColor)
+                    } else if let last = person.interactions.max(by: { $0.date < $1.date }) {
                         Text(NeutralPhrases.lastContact(channel: last.channel, note: last.note, date: last.date))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             HStack(spacing: EmberTheme.spacingS) {
                 Button {
                     services.router.composePersonID = person.id
                 } label: {
-                    Label(String(localized: "Message"), systemImage: "paperplane.fill")
-                        .frame(maxWidth: .infinity)
+                    actionLabel(String(localized: "Message"), systemImage: "paperplane.fill")
                 }
                 .buttonStyle(.borderedProminent)
                 Button {
                     showLogSheet = true
                 } label: {
-                    Label(String(localized: "Log"), systemImage: "plus.bubble")
-                        .frame(maxWidth: .infinity)
+                    actionLabel(String(localized: "Log"), systemImage: "plus.bubble")
                 }
                 .buttonStyle(.bordered)
                 .accessibilityLabel(String(localized: "Log an interaction"))
@@ -247,6 +282,47 @@ struct PersonDetailView: View {
             // Bordered styles keep these two separate tap targets inside the
             // List row (a plain-style row would fire both at once).
             .listRowSeparator(.hidden)
+        }
+    }
+
+    /// An explicit HStack, not a Label: inside a List a Label takes the row's
+    /// icon-column layout, which pulls icon and title apart.
+    private func actionLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.body.weight(.medium))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+    }
+
+    /// The nearest birthday or date inside the alert window — the best reason
+    /// to reach out, so it takes the header's context line ("Birthday today 🎂").
+    private var occasionLine: String? {
+        var soonest: (days: Int, text: String)?
+        func consider(_ days: Int?, _ label: String) {
+            guard let days, days <= NudgeScoring.birthdayWindowDays,
+                  days < (soonest?.days ?? .max) else { return }
+            soonest = (days, days == 0
+                ? String(localized: "\(label) today 🎂")
+                : String(localized: "\(label) \(NeutralPhrases.upcoming(daysAway: days))"))
+        }
+        if let birthday = effectiveBirthday {
+            consider(BirthdayMath.daysUntilNextBirthday(birthday, from: .now), String(localized: "Birthday"))
+        }
+        for customDate in person.customDates {
+            consider(
+                BirthdayMath.daysUntilNextBirthday(DateComponents(month: customDate.month, day: customDate.day), from: .now),
+                customDate.label
+            )
+        }
+        return soonest?.text
+    }
+
+    /// Set once, rarely changed — so it sits below the things you act on.
+    private var keepInTouchSection: some View {
+        Section {
             KeepInTouchPicker(selection: keepInTouchBinding)
         } footer: {
             Text(person.keepInTouch.explanation)
@@ -457,20 +533,10 @@ struct PersonDetailView: View {
                     deleteButton { modelContext.delete(commitment) }
                 }
             }
-            TextField(String(localized: "You said you'd…"), text: $newCommitmentText)
-                .submitLabel(.done)
-                .onSubmit {
-                    let trimmed = newCommitmentText.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
-                    modelContext.insert(Commitment(person: person, text: trimmed))
-                    try? modelContext.save()
-                    newCommitmentText = ""
-                }
+            commitmentAdder
         } header: {
-            Text(String(localized: "Commitments"))
-        } footer: {
-            if person.commitments.isEmpty {
-                Text(String(localized: "Things you said you'd do. Open ones come up when Ember suggests reaching out."))
+            if !person.commitments.isEmpty {
+                Text(String(localized: "Commitments"))
             }
         }
     }
@@ -486,17 +552,76 @@ struct PersonDetailView: View {
                     deleteButton { modelContext.delete(idea) }
                 }
             }
-            TextField(String(localized: "Gift idea, topic to raise…"), text: $newIdeaText)
-                .submitLabel(.done)
-                .onSubmit {
-                    let trimmed = newIdeaText.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
-                    modelContext.insert(Idea(person: person, text: trimmed))
-                    try? modelContext.save()
-                    newIdeaText = ""
-                }
+            ideaAdder
         } header: {
-            Text(String(localized: "Ideas"))
+            if !person.ideas.isEmpty {
+                Text(String(localized: "Ideas"))
+            }
+        }
+    }
+
+    private var commitmentAdder: some View {
+        addRow(
+            .commitment,
+            title: String(localized: "Add a commitment"),
+            systemImage: "checklist",
+            prompt: String(localized: "You said you'd…"),
+            text: $newCommitmentText
+        ) { text in
+            modelContext.insert(Commitment(person: person, text: text))
+        }
+    }
+
+    private var ideaAdder: some View {
+        addRow(
+            .idea,
+            title: String(localized: "Add an idea"),
+            systemImage: "lightbulb",
+            prompt: String(localized: "Gift idea, topic to raise…"),
+            text: $newIdeaText
+        ) { text in
+            modelContext.insert(Idea(person: person, text: text))
+        }
+    }
+
+    /// A quiet "Add …" row (like "Add a date") that becomes a text field on
+    /// tap. Submitting saves and keeps the field open for the next one.
+    @ViewBuilder
+    private func addRow(
+        _ field: AddField,
+        title: String,
+        systemImage: String,
+        prompt: String,
+        text: Binding<String>,
+        insert: @escaping (String) -> Void
+    ) -> some View {
+        if adding == field {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 22)
+                TextField(prompt, text: text)
+                    .focused($focusedField, equals: field)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        let trimmed = text.wrappedValue.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty else {
+                            adding = nil
+                            return
+                        }
+                        insert(trimmed)
+                        try? modelContext.save()
+                        text.wrappedValue = ""
+                        focusedField = field
+                    }
+            }
+        } else {
+            Button {
+                adding = field
+                focusedField = field
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
         }
     }
 
@@ -520,9 +645,11 @@ struct PersonDetailView: View {
             HStack {
                 Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
                     .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+                // Explicit Colors: a hierarchical .primary inside a Button
+                // resolves to the tint, which turned every item orange.
                 Text(text)
                     .strikethrough(isDone)
-                    .foregroundStyle(isDone ? .secondary : .primary)
+                    .foregroundStyle(isDone ? Color.secondary : Color.primary)
             }
         }
         .accessibilityAddTraits(isDone ? .isSelected : [])

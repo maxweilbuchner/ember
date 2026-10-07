@@ -159,6 +159,14 @@ struct NeutralPhrasesTests {
         #expect(NeutralPhrases.clip("Supercalifragilisticexpialidocious", limit: 10) == "Supercalif…")
     }
 
+    @Test func lastContactWithoutNoteNeverSaysOther() {
+        let now = date(2026, 7, 27)
+        let line = NeutralPhrases.lastContact(channel: .other, note: nil, date: date(2026, 6, 15), now: now)
+        #expect(line == "Last in touch mid-June")
+        let withNote = NeutralPhrases.lastContact(channel: .other, note: "wedding", date: date(2026, 6, 15), now: now)
+        #expect(withNote.hasPrefix("Last: wedding"))
+    }
+
     @Test func lastContactKeepsTheDateWhenTheNoteIsLong() {
         let now = date(2026, 7, 27)
         let line = NeutralPhrases.lastContact(

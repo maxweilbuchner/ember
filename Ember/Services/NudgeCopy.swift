@@ -178,7 +178,11 @@ nonisolated enum NeutralPhrases {
 
     /// "Last: coffee, mid-June" — note if there is one, else the channel word.
     /// The note is clipped at a word so the date half always survives.
+    /// "Other" says nothing as a word, so it reads "Last in touch today".
     static func lastContact(channel: Channel, note: String?, date: Date, now: Date = .now) -> String {
+        if note?.isEmpty != false, channel == .other {
+            return String(localized: "Last in touch \(phrase(for: date, now: now))")
+        }
         let what = (note?.isEmpty == false ? note! : channel.title.lowercased())
         return String(localized: "Last: \(clip(what, limit: 30)), \(phrase(for: date, now: now))")
     }

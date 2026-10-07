@@ -66,7 +66,7 @@ nonisolated enum KeepInTouch: Hashable, CaseIterable, Sendable {
     var explanation: String {
         switch self {
         case .partner:
-            String(localized: "Your partner is never nudged about staying in touch — birthdays, dates, commitments, and ideas still show up. One person at a time.")
+            String(localized: "No nudges to stay in touch — birthdays, dates, commitments, and ideas still show up. Only one person can be your partner.")
         case .close:
             String(localized: "A suggestion about every couple of weeks, plus birthday and date alerts.")
         case .regular:
