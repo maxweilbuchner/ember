@@ -20,6 +20,13 @@ struct PersonDetailView: View {
     @State private var confirmDelete = false
     @State private var newCommitmentText = ""
     @State private var newIdeaText = ""
+    @State private var adding: AddField?
+    @State private var headerScrolledAway = false
+    @FocusState private var focusedField: AddField?
+
+    private enum AddField: Hashable {
+        case commitment, idea
+    }
 
     private var isUnresolvable: Bool {
         person.contactID != nil && checkedResolution && resolvedContact == nil
@@ -32,10 +39,29 @@ struct PersonDetailView: View {
         return person.contactID == nil || isUnresolvable
     }
 
+    /// Interactions and journal mentions, newest first. An interaction that was
+    /// logged from an entry is the same moment as that entry's mention, so it
+    /// shows once — as the entry, wearing the interaction's channel icon.
     private var timeline: [TimelineItem] {
-        let interactions = person.interactions.map(TimelineItem.interaction)
+        let mentionIDs = Set(person.mentions.map(\.id))
+        let interactions = person.interactions
+            .filter { interaction in
+                guard let sourceID = interaction.sourceEntryID else { return true }
+                return !mentionIDs.contains(sourceID)
+            }
+            .map(TimelineItem.interaction)
         let mentions = person.mentions.map(TimelineItem.mention)
         return (interactions + mentions).sorted { $0.date > $1.date }
+    }
+
+    private var channelByEntryID: [UUID: Channel] {
+        var result: [UUID: Channel] = [:]
+        for interaction in person.interactions {
+            if let sourceID = interaction.sourceEntryID {
+                result[sourceID] = interaction.channel
+            }
+        }
+        return result
     }
 
     /// Canonical precedence: the linked contact's birthday wins, manual fills in.
@@ -61,28 +87,50 @@ struct PersonDetailView: View {
     }
 
     private var detailList: some View {
+        // Most actionable first: who they are and what to do, then what you
+        // owe them, then dates and labels, then the history.
         List {
             headerSection
-            datesSection
-            relationsSection
             if showsRelinkSection {
                 relinkSection
             }
-            Section {
-                Button {
-                    showLogSheet = true
-                } label: {
-                    Label(String(localized: "Log an interaction"), systemImage: "plus.bubble")
+            if person.commitments.isEmpty && person.ideas.isEmpty {
+                // Nothing noted yet: two quiet add rows, not two empty sections.
+                Section {
+                    commitmentAdder
+                    ideaAdder
                 }
+            } else {
+                commitmentsSection
+                ideasSection
             }
-            commitmentsSection
-            ideasSection
+            datesSection
+            relationsSection
+            keepInTouchSection
             timelineSection
         }
         .emberCanvas()
+        // The header card already names them; the bar only does once it has
+        // scrolled away (Contacts-style). The title still labels the back button.
         .navigationTitle(person.displayNameCache)
         .navigationBarTitleDisplayMode(.inline)
+        .onScrollGeometryChange(for: Bool.self) { geometry in
+            geometry.contentOffset.y + geometry.contentInsets.top > 90
+        } action: { _, scrolledAway in
+            withAnimation(EmberTheme.calm) { headerScrolledAway = scrolledAway }
+        }
+        .onChange(of: focusedField) { _, field in
+            // Leaving an empty add field folds it back into its add row.
+            if field == nil { adding = nil }
+        }
         .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(person.displayNameCache)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .opacity(headerScrolledAway ? 1 : 0)
+                    .accessibilityHidden(!headerScrolledAway)
+            }
             ToolbarItem {
                 Menu {
                     Button(role: .destructive) {
@@ -196,23 +244,85 @@ struct PersonDetailView: View {
 
     private var headerSection: some View {
         Section {
-            HStack(spacing: 14) {
+            HStack(alignment: .center, spacing: 14) {
                 PersonAvatarView(person: person, size: 56)
                 VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(person.displayNameCache)
-                            .font(.title3.weight(.semibold))
-                        if let relationChip {
-                            EmberChip(text: relationChip.text, systemImage: relationChip.systemImage)
-                        }
+                    Text(person.displayNameCache)
+                        .font(.title3.weight(.semibold))
+                    if let relationChip {
+                        EmberChip(text: relationChip.text, systemImage: relationChip.systemImage)
                     }
-                    if let last = person.interactions.max(by: { $0.date < $1.date }) {
+                    if let occasionLine {
+                        Text(occasionLine)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color.accentColor)
+                    } else if let last = person.interactions.max(by: { $0.date < $1.date }) {
                         Text(NeutralPhrases.lastContact(channel: last.channel, note: last.note, date: last.date))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            HStack(spacing: EmberTheme.spacingS) {
+                Button {
+                    services.router.composePersonID = person.id
+                } label: {
+                    actionLabel(String(localized: "Message"), systemImage: "paperplane.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                Button {
+                    showLogSheet = true
+                } label: {
+                    actionLabel(String(localized: "Log"), systemImage: "plus.bubble")
+                }
+                .buttonStyle(.bordered)
+                .accessibilityLabel(String(localized: "Log an interaction"))
+            }
+            // Bordered styles keep these two separate tap targets inside the
+            // List row (a plain-style row would fire both at once).
+            .listRowSeparator(.hidden)
+        }
+    }
+
+    /// An explicit HStack, not a Label: inside a List a Label takes the row's
+    /// icon-column layout, which pulls icon and title apart.
+    private func actionLabel(_ title: String, systemImage: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: systemImage)
+            Text(title)
+        }
+        .font(.body.weight(.medium))
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 2)
+    }
+
+    /// The nearest birthday or date inside the alert window — the best reason
+    /// to reach out, so it takes the header's context line ("Birthday today 🎂").
+    private var occasionLine: String? {
+        var soonest: (days: Int, text: String)?
+        func consider(_ days: Int?, _ label: String) {
+            guard let days, days <= NudgeScoring.birthdayWindowDays,
+                  days < (soonest?.days ?? .max) else { return }
+            soonest = (days, days == 0
+                ? String(localized: "\(label) today 🎂")
+                : String(localized: "\(label) \(NeutralPhrases.upcoming(daysAway: days))"))
+        }
+        if let birthday = effectiveBirthday {
+            consider(BirthdayMath.daysUntilNextBirthday(birthday, from: .now), String(localized: "Birthday"))
+        }
+        for customDate in person.customDates {
+            consider(
+                BirthdayMath.daysUntilNextBirthday(DateComponents(month: customDate.month, day: customDate.day), from: .now),
+                customDate.label
+            )
+        }
+        return soonest?.text
+    }
+
+    /// Set once, rarely changed — so it sits below the things you act on.
+    private var keepInTouchSection: some View {
+        Section {
             KeepInTouchPicker(selection: keepInTouchBinding)
         } footer: {
             Text(person.keepInTouch.explanation)
@@ -413,56 +523,144 @@ struct PersonDetailView: View {
     }
 
     private var commitmentsSection: some View {
-        Section(String(localized: "Commitments")) {
-            ForEach(person.commitments.sorted { $0.createdAt > $1.createdAt }) { commitment in
-                Button {
+        Section {
+            ForEach(openFirst(person.commitments, isDone: \.isDone, createdAt: \.createdAt)) { commitment in
+                checklistRow(text: commitment.text, isDone: commitment.isDone) {
                     commitment.isDone.toggle()
                     try? modelContext.save()
-                } label: {
-                    HStack {
-                        Image(systemName: commitment.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(commitment.isDone ? Color.accentColor : Color.secondary)
-                        Text(commitment.text)
-                            .strikethrough(commitment.isDone)
-                            .foregroundStyle(commitment.isDone ? .secondary : .primary)
-                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    deleteButton { modelContext.delete(commitment) }
                 }
             }
-            TextField(String(localized: "You said you'd…"), text: $newCommitmentText)
-                .onSubmit {
-                    let trimmed = newCommitmentText.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
-                    modelContext.insert(Commitment(person: person, text: trimmed))
-                    try? modelContext.save()
-                    newCommitmentText = ""
-                }
+            commitmentAdder
+        } header: {
+            if !person.commitments.isEmpty {
+                Text(String(localized: "Commitments"))
+            }
         }
     }
 
     private var ideasSection: some View {
-        Section(String(localized: "Ideas")) {
-            ForEach(person.ideas.sorted { $0.createdAt > $1.createdAt }) { idea in
-                Button {
+        Section {
+            ForEach(openFirst(person.ideas, isDone: \.isDone, createdAt: \.createdAt)) { idea in
+                checklistRow(text: idea.text, isDone: idea.isDone) {
                     idea.isDone.toggle()
                     try? modelContext.save()
-                } label: {
-                    HStack {
-                        Image(systemName: idea.isDone ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(idea.isDone ? Color.accentColor : Color.secondary)
-                        Text(idea.text)
-                            .strikethrough(idea.isDone)
-                            .foregroundStyle(idea.isDone ? .secondary : .primary)
-                    }
+                }
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    deleteButton { modelContext.delete(idea) }
                 }
             }
-            TextField(String(localized: "Gift idea, topic to raise…"), text: $newIdeaText)
-                .onSubmit {
-                    let trimmed = newIdeaText.trimmingCharacters(in: .whitespaces)
-                    guard !trimmed.isEmpty else { return }
-                    modelContext.insert(Idea(person: person, text: trimmed))
-                    try? modelContext.save()
-                    newIdeaText = ""
-                }
+            ideaAdder
+        } header: {
+            if !person.ideas.isEmpty {
+                Text(String(localized: "Ideas"))
+            }
+        }
+    }
+
+    private var commitmentAdder: some View {
+        addRow(
+            .commitment,
+            title: String(localized: "Add a commitment"),
+            systemImage: "checklist",
+            prompt: String(localized: "You said you'd…"),
+            text: $newCommitmentText
+        ) { text in
+            modelContext.insert(Commitment(person: person, text: text))
+        }
+    }
+
+    private var ideaAdder: some View {
+        addRow(
+            .idea,
+            title: String(localized: "Add an idea"),
+            systemImage: "lightbulb",
+            prompt: String(localized: "Gift idea, topic to raise…"),
+            text: $newIdeaText
+        ) { text in
+            modelContext.insert(Idea(person: person, text: text))
+        }
+    }
+
+    /// A quiet "Add …" row (like "Add a date") that becomes a text field on
+    /// tap. Submitting saves and keeps the field open for the next one.
+    @ViewBuilder
+    private func addRow(
+        _ field: AddField,
+        title: String,
+        systemImage: String,
+        prompt: String,
+        text: Binding<String>,
+        insert: @escaping (String) -> Void
+    ) -> some View {
+        if adding == field {
+            HStack(spacing: 10) {
+                Image(systemName: systemImage)
+                    .foregroundStyle(Color.accentColor)
+                    .frame(width: 22)
+                TextField(prompt, text: text)
+                    .focused($focusedField, equals: field)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        let trimmed = text.wrappedValue.trimmingCharacters(in: .whitespaces)
+                        guard !trimmed.isEmpty else {
+                            adding = nil
+                            return
+                        }
+                        insert(trimmed)
+                        try? modelContext.save()
+                        text.wrappedValue = ""
+                        focusedField = field
+                    }
+            }
+        } else {
+            Button {
+                adding = field
+                focusedField = field
+            } label: {
+                Label(title, systemImage: systemImage)
+            }
+        }
+    }
+
+    /// Open items first (newest on top), finished ones after — so the list
+    /// reads as what's left, not as a log.
+    private func openFirst<Item>(
+        _ items: [Item],
+        isDone: KeyPath<Item, Bool>,
+        createdAt: KeyPath<Item, Date>
+    ) -> [Item] {
+        items.sorted { lhs, rhs in
+            if lhs[keyPath: isDone] != rhs[keyPath: isDone] {
+                return !lhs[keyPath: isDone]
+            }
+            return lhs[keyPath: createdAt] > rhs[keyPath: createdAt]
+        }
+    }
+
+    private func checklistRow(text: String, isDone: Bool, toggle: @escaping () -> Void) -> some View {
+        Button(action: toggle) {
+            HStack {
+                Image(systemName: isDone ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isDone ? Color.accentColor : Color.secondary)
+                // Explicit Colors: a hierarchical .primary inside a Button
+                // resolves to the tint, which turned every item orange.
+                Text(text)
+                    .strikethrough(isDone)
+                    .foregroundStyle(isDone ? Color.secondary : Color.primary)
+            }
+        }
+        .accessibilityAddTraits(isDone ? .isSelected : [])
+    }
+
+    private func deleteButton(_ delete: @escaping () -> Void) -> some View {
+        Button(role: .destructive) {
+            delete()
+            try? modelContext.save()
+        } label: {
+            Label(String(localized: "Delete"), systemImage: "trash")
         }
     }
 
@@ -487,14 +685,27 @@ struct PersonDetailView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
+                    // A mistaken log shouldn't be permanent — it feeds the
+                    // nudge engine's sense of when you were last in touch.
+                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                        deleteButton { modelContext.delete(interaction) }
+                    }
                 case .mention(let entry):
                     NavigationLink {
                         EntryDetailView(entry: entry)
                     } label: {
                         HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "book.closed")
-                                .foregroundStyle(.secondary)
-                                .frame(width: 22)
+                            if let channel = channelByEntryID[entry.id] {
+                                Image(systemName: channel.symbolName)
+                                    .foregroundStyle(Color.accentColor)
+                                    .frame(width: 22)
+                                    .accessibilityLabel(channel.title)
+                            } else {
+                                Image(systemName: "book.closed")
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 22)
+                                    .accessibilityLabel(String(localized: "Journal mention"))
+                            }
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(entry.previewLine)
                                     .lineLimit(2)

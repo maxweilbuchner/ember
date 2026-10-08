@@ -12,6 +12,11 @@ struct SettingsView: View {
     @State private var showMeCardPicker = false
     @State private var meCardName: String?
     @State private var contactStatus = ContactService.authorizationStatus
+    @State private var refreshState: RefreshState = .idle
+
+    private enum RefreshState {
+        case idle, running, done
+    }
 
     var body: some View {
         NavigationStack {
@@ -30,9 +35,25 @@ struct SettingsView: View {
                             showContactPicker = true
                         }
                     }
-                    Button(String(localized: "Refresh names now")) {
-                        Task { await services.personSync.refreshAll() }
+                    Button {
+                        refreshNames()
+                    } label: {
+                        HStack {
+                            Text(String(localized: "Refresh names now"))
+                            Spacer()
+                            switch refreshState {
+                            case .idle:
+                                EmptyView()
+                            case .running:
+                                ProgressView()
+                            case .done:
+                                Label(String(localized: "Up to date"), systemImage: "checkmark")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
                     }
+                    .disabled(refreshState == .running)
                     Button {
                         showMeCardPicker = true
                     } label: {
@@ -97,6 +118,16 @@ struct SettingsView: View {
             .task {
                 meCardName = await services.contacts.meContact()?.displayName
             }
+        }
+    }
+
+    private func refreshNames() {
+        refreshState = .running
+        Task {
+            await services.personSync.refreshAll()
+            refreshState = .done
+            try? await Task.sleep(for: .seconds(2))
+            refreshState = .idle
         }
     }
 

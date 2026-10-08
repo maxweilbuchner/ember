@@ -152,6 +152,45 @@ struct NeutralPhrasesTests {
         #expect(noNote.localizedCaseInsensitiveContains("call"))
     }
 
+    @Test func clipBreaksAtAWordAndKeepsShortTextWhole() {
+        #expect(NeutralPhrases.clip("coffee", limit: 30) == "coffee")
+        let clipped = NeutralPhrases.clip("Coffee — she got the gallery job in Vienna", limit: 30)
+        #expect(clipped == "Coffee — she got the gallery…")
+        #expect(NeutralPhrases.clip("Supercalifragilisticexpialidocious", limit: 10) == "Supercalif…")
+    }
+
+    @Test func lastContactWithoutNoteNeverSaysOther() {
+        let now = date(2026, 7, 27)
+        let line = NeutralPhrases.lastContact(channel: .other, note: nil, date: date(2026, 6, 15), now: now)
+        #expect(line == "Last in touch mid-June")
+        let withNote = NeutralPhrases.lastContact(channel: .other, note: "wedding", date: date(2026, 6, 15), now: now)
+        #expect(withNote.hasPrefix("Last: wedding"))
+    }
+
+    @Test func lastContactKeepsTheDateWhenTheNoteIsLong() {
+        let now = date(2026, 7, 27)
+        let line = NeutralPhrases.lastContact(
+            channel: .inPerson,
+            note: "Long call about the Berlin move and the new flat",
+            date: date(2026, 6, 15),
+            now: now
+        )
+        #expect(line.hasSuffix(", mid-June"))
+        #expect(!line.contains("mov…"), "never clipped mid-word")
+    }
+
+    @Test func cardContextPrefersCommitmentThenNote() {
+        #expect(NudgeCopy.cardContext(lastInteractionNote: "ramen", firstOpenCommitment: "send the book") == "You said you'd send the book")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: "ramen", firstOpenCommitment: nil) == "Last time: ramen")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: "  ", firstOpenCommitment: "") == nil)
+    }
+
+    @Test func cardContextReadsCommitmentsMidSentence() {
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "Send Anna the book") == "You said you'd send Anna the book")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "CV feedback") == "You said you'd CV feedback")
+        #expect(NudgeCopy.cardContext(lastInteractionNote: nil, firstOpenCommitment: "I'll call back") == "You said you'd I'll call back")
+    }
+
     @Test func journalAppearancesInflectSingularAndPlural() {
         // Guards the AttributedString localization path — String(localized:)
         // would leak the ^[…](inflect: true) markup verbatim into the UI.

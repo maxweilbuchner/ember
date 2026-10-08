@@ -3,8 +3,9 @@
 import SwiftData
 import SwiftUI
 
-/// The default tab — and effectively the app: capture at the top, then pending
-/// review chips, today's nudges, and upcoming birthdays.
+/// The default tab — and effectively the app: capture at the top, then today's
+/// nudges, today's entries with their tags, and upcoming dates. When all of
+/// that is quiet, a short note says what the field is for (spec §5.3).
 struct TodayView: View {
     @Environment(AppServices.self) private var services
     @Environment(\.scenePhase) private var scenePhase
@@ -63,6 +64,11 @@ struct TodayView: View {
                         sectionHeader(String(localized: "Coming up"))
                         OccasionList(items: occasions)
                     }
+
+                    if isQuiet {
+                        quietNote
+                            .transition(.opacity)
+                    }
                 }
                 .padding()
                 // Card removals originate in async engine calls, so animation is
@@ -75,9 +81,43 @@ struct TodayView: View {
             .emberCanvas()
             .navigationTitle(String(localized: "Today"))
             .task {
-                occasions = await services.dateEngine.upcoming(withinDays: 7)
+                await refreshOccasions()
+            }
+            // Dates change while the app sits in the background (midnight, a
+            // birthday added in Contacts) — re-read when it comes back.
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    Task { await refreshOccasions() }
+                }
             }
         }
+    }
+
+    private func refreshOccasions() async {
+        occasions = await services.dateEngine.upcoming(withinDays: 7)
+    }
+
+    private var isQuiet: Bool {
+        activeNudges.isEmpty && todaysEntries.isEmpty && occasions.isEmpty
+    }
+
+    private var hasPeople: Bool {
+        people.contains { !$0.isPlaceholder }
+    }
+
+    private var quietNote: some View {
+        VStack(alignment: .leading, spacing: EmberTheme.spacingS) {
+            Label(String(localized: "A quiet day"), systemImage: "leaf")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+            Text(hasPeople
+                ? String(localized: "Jot down who you saw, called, or texted — a line is enough. Ember tags the people for you, and once a week suggests a few who'd enjoy hearing from you.")
+                : String(localized: "Add the people you'd like to keep close on the People tab. Then jot down who you saw or talked to — a line is enough."))
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, EmberTheme.spacingXS)
     }
 
     private func sectionHeader(_ title: String) -> some View {
@@ -87,22 +127,37 @@ struct TodayView: View {
     }
 }
 
+/// Upcoming birthdays and dates. A row is one tap into Compose — an occasion
+/// is a reason to reach out, so it leads straight to the message (§1.3).
 private struct OccasionList: View {
     let items: [UpcomingOccasion]
+    @Environment(AppServices.self) private var services
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(items) { item in
-                HStack(spacing: 10) {
-                    Image(systemName: symbolName(for: item.kind))
-                        .foregroundStyle(Color.accentColor)
-                    Text(title(for: item))
-                        .fontWeight(.medium)
-                    Spacer()
-                    Text(phrase(for: item))
-                        .foregroundStyle(.secondary)
+                Button {
+                    services.router.composePersonID = item.personID
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: symbolName(for: item.kind))
+                            .foregroundStyle(Color.accentColor)
+                        Text(title(for: item))
+                            .fontWeight(.medium)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                        Spacer()
+                        Text(phrase(for: item))
+                            .foregroundStyle(.secondary)
+                        Image(systemName: "paperplane")
+                            .font(.caption)
+                            .foregroundStyle(Color.accentColor)
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
+                .accessibilityHint(String(localized: "Opens a message to \(item.displayName)."))
             }
         }
         .emberCard()

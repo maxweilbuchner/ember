@@ -35,7 +35,7 @@ extension ContactService: ContactResolving {}
 /// Writing back to the address book — the only direction in which Ember mutates
 /// Contacts, and only ever with the user's say-so. Separate from reading so the
 /// decision logic can be tested without a live store.
-protocol ContactWriting: Sendable {
+nonisolated protocol ContactWriting: Sendable {
     func setBirthday(_ birthday: DateComponents?, forContactID contactID: String) async throws
 }
 

@@ -8,15 +8,27 @@ struct PeopleListView: View {
     @Query(sort: \Person.displayNameCache) private var people: [Person]
     @State private var showSettings = false
     @State private var showAddPeople = false
+    @State private var searchText = ""
 
     private var visiblePeople: [Person] {
         people.filter { !$0.isPlaceholder }
     }
 
+    private var searchedPeople: [Person] {
+        let query = searchText.trimmingCharacters(in: .whitespaces)
+        guard !query.isEmpty else { return visiblePeople }
+        return visiblePeople.filter {
+            NameMatcher.matches(
+                NameCandidate(id: "", givenName: "", familyName: "", nickname: "", displayName: $0.displayNameCache),
+                query: query
+            )
+        }
+    }
+
     /// Grouped by keep-in-touch choice, so the partner sits in its own section
     /// instead of under a cadence that doesn't apply to them.
     private func people(in choice: KeepInTouch) -> [Person] {
-        visiblePeople.filter { $0.keepInTouch == choice }
+        searchedPeople.filter { $0.keepInTouch == choice }
     }
 
     var body: some View {
@@ -27,7 +39,9 @@ struct PeopleListView: View {
                     EmptyStateView(
                         systemImage: "person.2",
                         title: String(localized: "Your people live here"),
-                        message: String(localized: "Add the friends and family you want to keep warm — a handful is plenty.")
+                        message: String(localized: "Add the friends and family you want to keep warm — a handful is plenty."),
+                        actionTitle: String(localized: "Add people"),
+                        action: { showAddPeople = true }
                     )
                 } else {
                     List {
@@ -44,6 +58,12 @@ struct PeopleListView: View {
                                     }
                                 }
                             }
+                        }
+                    }
+                    .searchable(text: $searchText, prompt: String(localized: "Search people"))
+                    .overlay {
+                        if searchedPeople.isEmpty {
+                            ContentUnavailableView.search(text: searchText)
                         }
                     }
                 }

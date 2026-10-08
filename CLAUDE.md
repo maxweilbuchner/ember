@@ -8,12 +8,13 @@ Privacy-first iOS personal CRM. **`EMBER_SPEC.md` is the source of truth** — r
 
 ```bash
 env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -scheme Ember \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' build
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' build
 
 env DEVELOPER_DIR=/Applications/Xcode.app xcodebuild -project Ember.xcodeproj -scheme Ember \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' test
 ```
 
+- Pin `OS=26.5`: with Xcode 27 installed, a bare `name=iPhone 17 Pro` resolves to the iOS 27 runtime, which has no such device.
 - Swift 6 language mode, strict concurrency, `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`.
 - The pbxproj uses **synchronized file system groups**: a new `.swift` file under `Ember/` or `EmberTests/` joins its target automatically — never add per-file pbxproj entries.
 - Tests are Swift Testing (`@Test`/`#expect`), hosted in the app.
@@ -48,3 +49,4 @@ All milestones M1–M5 are built; the app is feature-complete per `EMBER_SPEC.md
 - Notification switches (GH #10): `NotificationSettings` (SwiftData, `SchemaV2`) holds `nudgesEnabled`/`occasionAlertsEnabled`. SwiftData rather than UserDefaults **because the engines read it** — that's exactly the condition `SecurityService`'s carve-out comment excludes. Zero rows means both on; `flags(in:)` never inserts (so the engine actors can't race the main context), and `update(in:_:)` is the only write path, main-context only. Off **pauses the engine** rather than filtering its output: `NudgeEngine.evaluate` returns before writing any `NudgeRun`, which freezes the staleness clock so a quick off/on can't buy an extra run past the ≤3/week ceiling — hence `resumeNudges` → `evaluateIfStale`, never `evaluate`. `DateEngine.upcoming` is deliberately ungated: turning off alerts must not hide Today's "Coming up".
 - Person removal (spec §7 M6.6): all merge/anonymize logic lives in `Services/PersonMerge.swift` — never inline reassignment. Views calling it must follow with `AppServices.personRemoved(_:mergedInto:)` (suggestion remap + nudge close + occasion resweep). `Person.isPlaceholder` rows are filtered from the people list, extraction candidates, and person pickers — check those filters when adding a new person-listing surface.
 - Keep in touch (spec §7 M6.9): cadence + partner are ONE user-facing choice, `KeepInTouch` (Models/KeepInTouch.swift, pure), shown only through `Components/KeepInTouchPicker.swift`. Never set `tier`/`isPartnerMode` from a view — write through `Services/KeepInTouchAssignment.swift` (`apply` for an existing person, `insert` for add-flow `PersonDraft`s); it owns the one-partner rule. New add surfaces reuse `KeepInTouchStep`. Explanation copy in `KeepInTouch.explanation` must match what the engines do (DateEngine alerts only partner/close/regular).
+- UX overhaul (2026-10): every surface that names a person should lead toward a message — Today's "Coming up" rows and Person detail's header both open Compose via `router.composePersonID`. The Person timeline shows an entry-sourced interaction once (as the entry, with the channel icon); keep that dedupe if you add timeline sources. Commitments, ideas, and interactions are swipe-deletable; entry text is editable but editing never re-runs extraction or changes tags. Free-text truncation goes through `NeutralPhrases.clip` (word boundary). `EmptyStateView` takes an optional action — give empty states a way forward where one exists.
